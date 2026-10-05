@@ -1,0 +1,9 @@
+*.apk
+build/
+.gradle/
+homepage/download/
+*.jks
+keystore.properties
+.kotlin/
+local.properties
+__pycache__/

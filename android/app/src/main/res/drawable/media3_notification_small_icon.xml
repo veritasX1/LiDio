@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LiDio's note as the small notification icon (Media3 takes this name instead of its own). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="108" android:viewportHeight="108" android:tint="#FFFFFFFF">
+    <group android:rotation="-20" android:pivotX="39" android:pivotY="71">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M30,71 A9,6.5 0 1,0 48,71 A9,6.5 0 1,0 30,71 Z" />
+    </group>
+    <group android:rotation="-20" android:pivotX="64" android:pivotY="65">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M55,65 A9,6.5 0 1,0 73,65 A9,6.5 0 1,0 55,65 Z" />
+    </group>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M44.5,37 L48.9,37 L48.9,71 L44.5,71 Z M69.5,31 L73.9,31 L73.9,65 L69.5,65 Z M44.5,37 L73.9,29 L73.9,38 L44.5,46 Z" />
+</vector>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 108 108">
+  <!-- LiDio: two beamed notes on coral → violet (same drawing as the Android icon). -->
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF4F6D"/><stop offset="1" stop-color="#7B3FE4"/></linearGradient></defs>
+  <rect x="4" y="4" width="100" height="100" rx="23" fill="url(#g)"/>
+  <g fill="#fff">
+    <ellipse cx="39" cy="71" rx="9" ry="6.5" transform="rotate(-20 39 71)"/>
+    <ellipse cx="64" cy="65" rx="9" ry="6.5" transform="rotate(-20 64 65)"/>
+    <path d="M44.5,37 L48.9,37 L48.9,71 L44.5,71 Z"/><path d="M69.5,31 L73.9,31 L73.9,65 L69.5,65 Z"/>
+    <path d="M44.5,37 L73.9,29 L73.9,38 L44.5,46 Z"/>
+  </g>
+</svg>

@@ -1,0 +1,124 @@
+/* LiDio for Ubuntu – Music (macOS) look: Apple Music red, big bold titles, rounded covers, a central "LCD" in the toolbar. */
+@define-color lidio_red #fa2d48;
+/* Apple Music tints everything red – LiDio too (buttons, switches, selections). */
+@define-color accent_bg_color @lidio_red;
+@define-color accent_color @lidio_red;
+
+.cover { background: alpha(currentColor, 0.08); }
+.cover-placeholder { color: alpha(currentColor, 0.35); }
+
+.sidebar-heading { font-size: 11px; font-weight: 700; opacity: 0.55; margin: 14px 12px 4px 12px; }
+.navigation-sidebar row:selected { background: alpha(@lidio_red, 0.16); }
+.navigation-sidebar row:selected image { color: @lidio_red; }
+.navigation-sidebar image { color: @lidio_red; }
+
+.large-title { font-size: 28px; font-weight: 800; }
+.section-title { font-size: 20px; font-weight: 700; }
+.album-title { font-size: 26px; font-weight: 800; }
+.album-artist { font-size: 22px; color: @lidio_red; }
+.dim { opacity: 0.6; }
+.tile-title { font-weight: 600; }
+
+/* the "LCD" in the middle of the toolbar */
+.lcd { background: alpha(currentColor, 0.06); border-radius: 8px; padding: 0; min-height: 52px; }
+.lcd-title { font-weight: 600; }
+.lcd-artist { opacity: 0.65; font-size: 12px; }
+.lcd progressbar trough, .lcd progressbar progress { min-height: 3px; }
+.lcd progressbar progress { background: alpha(currentColor, 0.55); }
+
+.transport button { min-width: 34px; min-height: 34px; }
+.transport button.play image { -gtk-icon-size: 22px; }
+
+.red-button { background: @lidio_red; color: white; font-weight: 700; border-radius: 8px; padding: 6px 22px; }
+.red-button:hover { background: shade(@lidio_red, 1.08); }
+.red-text { color: @lidio_red; }
+
+.tracklist { background: transparent; }
+.tracklist row { padding: 5px 8px; border-radius: 6px; background: transparent; }
+.tracklist row.odd { background: alpha(currentColor, 0.035); }
+.tracklist row:hover { background: alpha(currentColor, 0.08); }
+.tracklist row.playing label.title { color: @lidio_red; font-weight: 600; }
+.track-number { min-width: 28px; opacity: 0.5; font-feature-settings: "tnum"; }
+.track-time { opacity: 0.55; font-feature-settings: "tnum"; }
+
+.queue-heading { font-weight: 700; font-size: 15px; margin: 12px 6px 4px 6px; }
+.lyrics-line { font-size: 22px; font-weight: 800; opacity: 0.35; }
+.lyrics-line.now { opacity: 1; }
+
+/* where a title is (computer / server / loading), favourites, Start */
+.where { opacity: 0.45; -gtk-icon-size: 14px; }
+.where-button { min-width: 22px; min-height: 22px; padding: 0; opacity: 0.4; }
+.where-button:hover { opacity: 1; color: @lidio_red; }
+image.favorite, button.favorite { color: @lidio_red; }
+.lcd-star { min-width: 26px; min-height: 26px; }
+.download-button { color: @lidio_red; }
+.destructive-text { color: @error_color; }
+.missing label.title { opacity: 0.45; }
+.mix-tile { border-radius: 10px; }
+.mix-pink { background: linear-gradient(135deg, #ff375f, #bf5af2); }
+.mix-blue { background: linear-gradient(135deg, #0a84ff, #30d158); }
+.mix-title { color: white; font-size: 20px; font-weight: 800; }
+.genre-tile { border-radius: 10px; }
+.genre-title { color: white; font-size: 17px; font-weight: 800; }
+.tracklist row:selected { background: alpha(@lidio_red, 0.18); }
+image.ok { color: #34c759; }
+image.unsure { color: #ff9500; }
+image.missing-x { color: #ff3b30; }
+
+/* full-screen player */
+.np-backdrop { filter: blur(70px) saturate(1.6); }
+.np-shade { background: alpha(black, 0.38); }
+.now-playing label { color: white; }
+.np-cover { box-shadow: 0 24px 60px alpha(black, 0.45); }
+.np-title { font-size: 26px; font-weight: 800; }
+.np-artist { font-size: 19px; opacity: 0.75; }
+.np-time { font-size: 12px; opacity: 0.7; font-feature-settings: "tnum"; }
+.now-playing scale trough { background: alpha(white, 0.25); min-height: 5px; border-radius: 3px; }
+.now-playing scale highlight { background: alpha(white, 0.85); border-radius: 3px; }
+.now-playing scale slider { opacity: 0; min-width: 10px; min-height: 10px; }
+.now-playing scale:hover slider { opacity: 1; background: white; }
+.now-playing image { color: white; }
+.np-button { min-width: 44px; min-height: 44px; }
+.np-button image { -gtk-icon-size: 24px; opacity: 0.85; }
+.np-button.np-on image { opacity: 1; color: white; }
+.np-button:not(.np-on) { }
+.np-play { min-width: 64px; min-height: 64px; }
+.np-play image { -gtk-icon-size: 38px; }
+.np-close { background: alpha(white, 0.18); color: white; min-width: 40px; min-height: 40px; }
+.np-lyrics { background: transparent; }
+.np-line { font-size: 30px; font-weight: 800; opacity: 0.4; }
+.np-line.now { opacity: 1; }
+
+/* Modern: Music in macOS 26 (Liquid Glass) – the sidebar floats as a glass panel, controls sit in capsules, bigger radii */
+window.modern .side-panel { margin: 8px 0 8px 8px; border-radius: 18px; background: alpha(@window_fg_color, 0.045);
+  border: 1px solid alpha(@window_fg_color, 0.07); box-shadow: 0 6px 24px alpha(black, 0.08); }
+window.modern .side-panel .navigation-sidebar { background: transparent; }
+window.modern .sidebar-pane, window.modern .sidebar-pane > * { background: transparent; }
+window.modern .transport button { min-height: 30px; }
+window.modern headerbar { background: transparent; box-shadow: none; border-bottom: none; }
+window.modern .transport { background: alpha(@window_fg_color, 0.06); border-radius: 999px; padding: 1px 6px; margin: 6px 0;
+  border: 1px solid alpha(@window_fg_color, 0.06); }
+window.modern .lcd { border-radius: 16px; background: alpha(@window_fg_color, 0.05); border: 1px solid alpha(@window_fg_color, 0.07); }
+window.modern .red-button { border-radius: 999px; padding: 7px 24px; }
+window.modern .tracklist row { border-radius: 10px; }
+window.modern .mix-tile, window.modern .genre-tile { border-radius: 16px; }
+window.modern .large-title { font-size: 32px; }
+
+/* Mini-Player (Music's MiniPlayer) */
+window.mini { background: transparent; border-radius: 14px; }
+.mini-glass { background: linear-gradient(to bottom, alpha(black, 0), alpha(black, 0.72) 30%); padding: 34px 14px 10px 14px;
+  border-radius: 0 0 14px 14px; opacity: 0; transition: opacity 200ms; }
+window.mini.hover .mini-glass, window.mini .mini-glass:focus-within { opacity: 1; }
+.mini-top { opacity: 0; transition: opacity 200ms; }
+window.mini.hover .mini-top { opacity: 1; }
+.mini-title { color: white; font-weight: 700; }
+.mini-artist { color: alpha(white, 0.75); font-size: 12px; }
+.mini-glass image { color: white; }
+.mini-glass scale trough { background: alpha(white, 0.3); min-height: 4px; }
+.mini-glass scale highlight { background: white; }
+.mini-glass scale slider { opacity: 0; }
+.mini-play { min-width: 46px; min-height: 46px; }
+.mini-play image { -gtk-icon-size: 28px; }
+.mini-round { background: alpha(black, 0.45); color: white; min-width: 28px; min-height: 28px; }
+.milk-name { color: white; font-weight: 700; text-shadow: 0 1px 3px black; transition: opacity 600ms; }
+.video { background: black; }

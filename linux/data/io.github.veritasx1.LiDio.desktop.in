@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=LiDio
+GenericName=Musik
+Comment=Deine Musik vom eigenen Server – Emby, Jellyfin, Navidrome
+Exec=@EXEC@ %u
+Icon=io.github.veritasx1.LiDio
+Terminal=false
+Categories=AudioVideo;Audio;Player;GTK;
+Keywords=Musik;Music;Emby;Jellyfin;Navidrome;Player;
+StartupNotify=true
+MimeType=x-scheme-handler/lidio;
+DBusActivatable=false
+X-GNOME-UsesNotifications=true

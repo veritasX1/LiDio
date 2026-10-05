@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Coral to violet (LiDio's own colours, not Apple Music's icon). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient android:startColor="#FFFF4F6D" android:endColor="#FF7B3FE4" android:angle="270" />
+</shape>
