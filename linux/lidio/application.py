@@ -12,7 +12,10 @@ from .offline import Offline
 from .mpris import Mpris
 from .servers import MediaBrowser, Subsonic, ServerError
 
-APP_ID = "io.github.veritasx1.LiDio"
+# An optional extension runs as an app of its own: own launcher, own window, own dock icon.
+PRIVATE = os.environ.get("LIDIO_PRIVAT") == "1" and os.path.isdir(os.path.join(os.path.dirname(__file__), "privat"))
+APP_ID = "io.github.veritasx1.LiDio" + (".Privat" if PRIVATE else "")
+APP_NAME = "LiDio privat" if PRIVATE else "LiDio"
 
 
 class Application(Adw.Application):
@@ -272,7 +275,7 @@ class Application(Adw.Application):
         d.present(self.window)
 
     def about(self):
-        a = Adw.AboutDialog(application_name="LiDio", application_icon=APP_ID, version="0.1", developer_name="Olaf von Heidenstein",
+        a = Adw.AboutDialog(application_name=APP_NAME, application_icon=APP_ID, version="0.1", developer_name="Olaf Winkler",
                             license_type=Gtk.License.GPL_3_0, comments="Deine Musik vom eigenen Server – wie Musik auf dem Mac, ohne Abo.",
                             website="https://lisoft.goip.de")
         a.present(self.window)

@@ -17,8 +17,8 @@ from .more import MoreMixin
 from .importui import ImportMixin
 
 try:       # optional extension package – not part of the published source
-    if os.environ.get("LIDIO_OEFFENTLICH"):
-        raise ImportError("öffentliche Ansicht erzwungen")
+    if os.environ.get("LIDIO_PRIVAT") != "1":
+        raise ImportError("öffentliche Fassung")
     from . import privat as PRIVAT
     from .privat import ui as PRIVAT_UI
     if not PRIVAT.available():
@@ -62,7 +62,7 @@ def label(text, css=None, xalign=0, ellipsize=True, wrap=False, lines=1):
 
 class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
     def __init__(self, app):
-        super().__init__(application=app, title="LiDio")
+        super().__init__(application=app, title=__import__("lidio.application", fromlist=["APP_NAME"]).APP_NAME)
         self.app, self.player = app, app.player
         self.server, self.account = None, None
         self.set_default_size(1240, 800)
