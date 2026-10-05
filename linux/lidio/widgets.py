@@ -91,7 +91,7 @@ class DownloadButton(Gtk.Button):
         self.set_tooltip_text(tip)
         self.update_property([Gtk.AccessibleProperty.LABEL], [tip])
 
-    def _clicked(self, *_):
+    def _clicked(self, *_a):
         import gi
         gi.require_version("Adw", "1")
         from gi.repository import Adw

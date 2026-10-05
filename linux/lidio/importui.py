@@ -166,7 +166,7 @@ class ImportMixin:
                 h.append(_label(clock(w.seconds) if w.seconds else "", "track-time", xalign=1))
                 r.set_child(h); lst.append(r)
 
-            def activated(_, r):
+            def activated(_a, r):
                 i = r.index
 
                 def go(res):
@@ -194,7 +194,7 @@ class ImportMixin:
                 file = dlg.open_finish(res)
             except GLib.Error:
                 return
-            ok, data, _ = file.load_contents(None)
+            ok, data, _etag = file.load_contents(None)
             name = file.get_basename() or "Playlist"
             wanted = I.read(data.decode("utf-8", "replace"), name) if ok else []
             if not wanted:
@@ -259,7 +259,7 @@ class ImportMixin:
             pop.connect("closed", lambda p: GLib.idle_add(lambda: (p.unparent(), False)[1]))
             pop.popup()
 
-        def compare(*_):
+        def compare(*_a):
             go.set_sensitive(False)
 
             def progress(i):
@@ -269,9 +269,9 @@ class ImportMixin:
                 results[:] = found; go.set_visible(False); fill()
             run(lambda: I.match(server, wanted, progress), done, lambda m: (go.set_sensitive(True), self.toast(m)))
         go.connect("clicked", compare)
-        copy.connect("clicked", lambda *_: (self.get_clipboard().set(I.missing_text(results)), self.toast(_("Fehlende Titel kopiert"))))
+        copy.connect("clicked", lambda *_a: (self.get_clipboard().set(I.missing_text(results)), self.toast(_("Fehlende Titel kopiert"))))
 
-        def create(*_):
+        def create(*_a):
             tracks = [r.track for r in results if r.match != I.MISSING and r.track]
             missing = [f"{i + 1} · {r.wanted}" for i, r in enumerate(results) if r.match == I.MISSING]
             title = name_row.get_text().strip() or "Importiert"

@@ -101,7 +101,7 @@ class MoreMixin:
             for t in tracks:
                 server.set_favorite(t, on)
 
-        def done(_):
+        def done(_a):
             for t in tracks:
                 t.favorite = on
             cur = self.player.current
@@ -174,7 +174,7 @@ class MoreMixin:
         from .window import run
         name = next((p.name for p in self._playlists if p.id == playlist_id), "Playlist")
         run(lambda: self.server.add_to_playlist(playlist_id, tracks),
-            lambda _: self.toast(_("Zu „{name}“ hinzugefügt", name=name) + (_(" ({count} Titel)", count=len(tracks)) if len(tracks) > 1 else "")), self.toast)
+            lambda _a: self.toast(_("Zu „{name}“ hinzugefügt", name=name) + (_(" ({count} Titel)", count=len(tracks)) if len(tracks) > 1 else "")), self.toast)
 
     def _remove_from_playlist(self):
         from .window import run
@@ -182,7 +182,7 @@ class MoreMixin:
         if not p:
             return
         run(lambda: self.server.remove_from_playlist(p.id, tracks),
-            lambda _: (self.toast(_("Aus der Playlist entfernt")), self.nav.replace([self.playlist_page(p.id, p.name)])), self.toast)
+            lambda _a: (self.toast(_("Aus der Playlist entfernt")), self.nav.replace([self.playlist_page(p.id, p.name)])), self.toast)
 
     def reload_playlists(self, select=None):
         from .window import run
@@ -221,7 +221,7 @@ class MoreMixin:
             d.add_response("cancel", _("Abbrechen")); d.add_response("del", _("Löschen"))
             d.set_response_appearance("del", Adw.ResponseAppearance.DESTRUCTIVE); d.set_close_response("cancel")
             d.connect("response", lambda d, r: run(lambda: self.server.delete_playlist(p.id),
-                                                   lambda _: (self.toast(_("Playlist gelöscht")), self.reload_playlists(), self.show_page("recent")),
+                                                   lambda _a: (self.toast(_("Playlist gelöscht")), self.reload_playlists(), self.show_page("recent")),
                                                    self.toast) if r == "del" else None)
             d.present(self)
         item(_("Playlist löschen …"), delete, "destructive-text")
@@ -262,10 +262,10 @@ class MoreMixin:
             save = Gtk.Button(label=_("Sichern"), css_classes=["suggested-action", "pill"], halign=Gtk.Align.CENTER, margin_top=12)
             sg = Adw.PreferencesGroup(); sg.add(save); page.add(sg)
 
-            def store(*_):
+            def store(*_a):
                 users = {uid: levels[r.get_selected()][0] for uid, r in rows.items()}
                 save.set_sensitive(False)
-                run(lambda: self.server.share(p.id, users, everyone.get_active()), lambda _: (d.close(), self.toast(_("Freigabe gesichert"))),
+                run(lambda: self.server.share(p.id, users, everyone.get_active()), lambda _a: (d.close(), self.toast(_("Freigabe gesichert"))),
                     lambda m: (save.set_sensitive(True), self.toast(m)))
             save.connect("clicked", store)
         run(lambda: self.server.sharing(p.id), show, lambda m: (d.close(), self.toast(m)))

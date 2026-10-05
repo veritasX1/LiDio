@@ -238,7 +238,7 @@ class Player:
         if msg.type == Gst.MessageType.EOS:
             self.playing = False; self.playbin.set_state(Gst.State.NULL); self._changed()
         elif msg.type == Gst.MessageType.ERROR:
-            err, _ = msg.parse_error()
+            err, _dbg = msg.parse_error()
             self.error = _("Wiedergabe nicht möglich – ") + (_("keine Verbindung zum Server") if "Could not" in err.message or "resolve" in err.message else err.message)
             self.playing = False; self._changed("error")
         elif msg.type == Gst.MessageType.ELEMENT and msg.get_structure() and msg.get_structure().get_name() == "spectrum":

@@ -269,7 +269,7 @@ class Application(Adw.Application):
         cid = Adw.EntryRow(title="Client-ID", text=self._setting("spotifyId", ""))
         sec = Adw.PasswordEntryRow(title="Client-Secret", text=self.spotify_key()[1])
 
-        def store(*_):
+        def store(*_a):
             self._set("spotifyId", cid.get_text().strip())
             if sec.get_text().strip():
                 Secret.password_store_sync(accounts.SCHEMA, {"account": "spotify"}, Secret.COLLECTION_DEFAULT, _("LiDio – Spotify"), sec.get_text().strip(), None)
@@ -314,7 +314,7 @@ class Application(Adw.Application):
         pick = Adw.ActionRow(title=_("Ordner wählen …"), subtitle=_("z. B. dein Musik-Ordner – LiDio liest nur diese"), activatable=True, visible=False)
         pick.add_suffix(Gtk.Image.new_from_icon_name("folder-open-symbolic"))
 
-        def choose(*_):
+        def choose(*_a):
             fd = Gtk.FileDialog(title=_("Musik-Ordner wählen"))
 
             def done(dlg, res):
@@ -350,7 +350,7 @@ class Application(Adw.Application):
         page.add(bg)
         tv.set_content(page); d.set_child(tv)
 
-        def connect(*_):
+        def connect(*_a):
             k = ["emby", "jellyfin", "navidrome", "local"][kind.get_selected()]
             if k == "local":
                 if not folders:

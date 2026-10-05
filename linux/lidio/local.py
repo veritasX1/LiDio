@@ -107,7 +107,7 @@ class LocalLibrary:
         old = self._json("index.json", {})
         new, n = {}, 0
         for folder in self.folders:
-            for root, _, files in os.walk(folder):
+            for root, _dirs, files in os.walk(folder):
                 pictures = [p for p in PICTURES if p in {x.lower() for x in files}]
                 for name in files:
                     if os.path.splitext(name)[1].lower() not in AUDIO:
