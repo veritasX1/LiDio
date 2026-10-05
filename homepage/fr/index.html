@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LiDio – Votre musique depuis votre propre serveur</title>
+<meta name="description" content="LiDio joue votre propre musique depuis Emby, Jellyfin, Navidrome ou des dossiers – conçu selon les directives d’Apple, pour Android et Ubuntu. Sans abonnement, sans publicité, sans collecte de données.">
+<link rel="icon" href="../lidio.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../site.css">
+<!--lang--><link rel="alternate" hreflang="de" href="https://lisoft.goip.de/lidio/"><link rel="alternate" hreflang="en" href="https://lisoft.goip.de/lidio/en/"><link rel="alternate" hreflang="fr" href="https://lisoft.goip.de/lidio/fr/">
+<style>
+.apps .wrap { position: relative; }
+.lang-switch { position: absolute; right: 22px; display: flex; gap: 12px; }
+.lang-switch a[aria-current], .lang-foot a[aria-current] { color: #fff; opacity: 1; font-weight: 600; }
+.lang-foot { display: flex; gap: 14px; justify-content: center; padding-top: 18px; font-size: 13px; }
+.lang-foot a[aria-current] { color: inherit; }
+@media (max-width: 900px) { .lang-switch { display: none; } }
+</style><!--/lang-->
+</head>
+<body>
+
+<div class="apps">
+  <div class="wrap">
+    <a href="https://lisoft.goip.de/linotes/fr/">LiNotes</a>
+    <a href="https://lisoft.goip.de/prevux/fr/">Prevux</a>
+    <a href="https://lisoft.goip.de/liboard/fr/">LiBoard</a>
+    <a href="https://lisoft.goip.de/licida/fr/">LiCida</a>
+    <a href="https://lisoft.goip.de/lical/fr/">LiCal</a>
+    <a href="https://lisoft.goip.de/lidio/fr/" aria-current="page">LiDio</a>
+  <!--lang--><span class="lang-switch"><a href="../" hreflang="de" lang="de">DE</a><a href="../en/" hreflang="en" lang="en">EN</a><a href="./" hreflang="fr" lang="fr" aria-current="true">FR</a></span><!--/lang-->
+  </div>
+</div>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="../lidio.svg" alt="">LiDio</a>
+    <nav class="links">
+      <a href="#mediathek">Bibliothèque</a>
+      <a href="#playlists">Playlists</a>
+      <a href="#winamp">Winamp</a>
+      <a href="#datenschutz">Confidentialité</a>
+      <a href="https://github.com/veritasX1/LiDio">GitHub</a>
+    </nav>
+    <a class="btn small cta" href="#laden">Télécharger</a>
+  </div>
+</header>
+
+<main>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap">
+    <img class="app-icon reveal" src="../lidio.svg" alt="Icône de LiDio" width="120" height="120">
+    <span class="badge reveal">Nouveau : version 0.1 bêta · Android et Ubuntu</span>
+    <h1 class="display reveal d1">Votre musique.<br><span class="gradient-text">Votre serveur.</span></h1>
+    <p class="lead reveal d2">LiDio joue la musique qui vous appartient – depuis votre Emby, Jellyfin ou Navidrome à la maison<br>ou depuis des dossiers sur l’appareil. S’utilise comme l’app Musique de l’iPhone et du Mac. Sans abonnement.</p>
+    <div class="actions reveal d3">
+      <a class="btn" href="#laden">Télécharger gratuitement</a>
+      <a class="btn ghost" href="#mediathek">Découvrir</a>
+    </div>
+    <div class="hero-shot reveal">
+      <div class="window"><img src="../img/album.webp" alt="LiDio sous Ubuntu : un album avec sa liste de morceaux, à droite les paroles qui défilent, en haut la lecture" width="1600" height="1032"></div>
+    </div>
+  </div>
+</section>
+
+<section class="wrap center" style="padding-top: 40px; max-width: 1000px">
+  <p class="headline reveal">Conçu comme l’app Musique.<br><span style="color: var(--muted)">Pour votre propre collection.</span></p>
+  <p class="lead reveal d1">Des années à collectionner vinyles, CD et fichiers – et il faudrait ne les écouter que dans une app par abonnement ? LiDio amène votre collection sur téléphone et ordinateur comme vous le connaissez chez Apple : grandes pochettes, listes claires, « À l’écoute » avec paroles. Conçu selon les Human Interface Guidelines d’Apple, en look verre moderne ou classique.</p>
+</section>
+
+<!-- LIBRARY -->
+<section id="mediathek" class="alt">
+  <div class="wrap section-head reveal" style="margin-bottom: 30px">
+    <p class="eyebrow">Bibliothèque</p>
+    <h2 class="headline">Chaque chose à sa place.</h2>
+    <p class="lead">Accueil avec des mix pour vous, albums, artistes, morceaux, genres, morceaux favoris et playlists – rapide, même avec des dizaines de milliers de morceaux.</p>
+  </div>
+  <div class="wrap twin">
+    <figure class="reveal" style="margin:0"><div class="window"><img src="../img/start.webp" alt="Accueil avec « Mix pour vous » et « Ajouts récents »" loading="lazy"></div></figure>
+    <figure class="reveal d1" style="margin:0"><div class="window"><img src="../img/alben-dunkel.webp" alt="Albums en grille en apparence sombre" loading="lazy"></div></figure>
+  </div>
+</section>
+
+<!-- NOW PLAYING -->
+<section>
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">À l’écoute</p>
+      <h2 class="headline">Grand. Calme.<br>Avec les paroles.</h2>
+      <p class="lead">La pochette remplit l’espace, ses couleurs s’étalent doucement derrière, les paroles défilent – et un clic sur une ligne y saute. Les paroles viennent de votre serveur ou, si vous le souhaitez, de lrclib.net.</p>
+    </div>
+    <div class="hero-shot reveal" style="margin-top: 30px"><div class="window"><img src="../img/jetzt-laeuft.webp" alt="Lecteur plein écran : grande pochette, arrière-plan flou, paroles qui défilent" loading="lazy"></div></div>
+  </div>
+</section>
+
+<!-- PLAYLISTS -->
+<section id="playlists" class="alt">
+  <div class="wrap">
+    <div class="split">
+      <div class="reveal">
+        <p class="eyebrow">Playlists</p>
+        <h2 class="headline">Vos listes<br>déménagent avec vous.</h2>
+        <p class="lead">Apportez simplement les playlists d’autres apps, de Deezer ou de Spotify : LiDio retrouve chaque morceau sur votre serveur – même s’il s’y appelle « (Remastered 2011) ».</p>
+        <ul class="checks">
+          <li><b>Trouvé, incertain, manquant :</b> vert, orange, rouge – pour les incertains, c’est vous qui choisissez.</li>
+          <li><b>Ce qui manque reste visible :</b> en gris à sa place et dans la description de la playlist – lisible dans n’importe quelle app.</li>
+          <li><b>Fichiers :</b> M3U, M3U8, PLS, XSPF, CSV ou simple texte.</li>
+          <li><b>Partager :</b> avec tout le monde sur votre serveur ou avec certaines personnes – pour écouter ou modifier ensemble.</li>
+        </ul>
+      </div>
+      <div class="reveal d1"><div class="window"><img src="../img/genres.webp" alt="Genres en tuiles colorées" loading="lazy"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- WINAMP -->
+<section id="winamp">
+  <div class="wrap">
+    <div class="split reverse">
+      <div class="reveal">
+        <p class="eyebrow">Pour les nostalgiques</p>
+        <h2 class="headline">Pour tous ceux<br>à qui Winamp manque.</h2>
+        <p class="lead">Un interrupteur et LiDio devient un lecteur Winamp 2 – avec de vrais skins du Winamp Skin Museum, égaliseur, spectre et fenêtre de playlist. Et Milkdrop peint ce que vous entendez.</p>
+        <ul class="checks">
+          <li><b>Des dizaines de milliers de skins</b> à parcourir, un clic pour en changer.</li>
+          <li><b>Égaliseur</b> à dix bandes qui agit vraiment sur le son.</li>
+          <li><b>Milkdrop</b> via projectM – en fenêtre ou en plein écran.</li>
+          <li><b>Mini-lecteur</b> dans le style d’Apple, quand on veut faire simple.</li>
+        </ul>
+      </div>
+      <div class="reveal d1" style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: end">
+        <img src="../img/winamp.webp" alt="Vue Winamp avec fenêtre principale, égaliseur et playlist" loading="lazy" style="border-radius: 6px; box-shadow: var(--shadow)">
+        <img src="../img/mini.webp" alt="Mini-lecteur dans le style d’Apple" loading="lazy" style="border-radius: 14px; box-shadow: var(--shadow)">
+      </div>
+    </div>
+    <div class="hero-shot reveal" style="margin-top: 50px"><div class="window"><img src="../img/milkdrop.webp" alt="Visualisation Milkdrop" loading="lazy"></div></div>
+  </div>
+</section>
+
+<!-- TILES -->
+<section class="alt">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Fonctions</p>
+      <h2 class="headline">Et bien plus encore.</h2>
+    </div>
+    <div class="tiles">
+      <div class="tile reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="7" rx="2"/><rect x="4" y="13.5" width="16" height="7" rx="2"/><circle cx="8" cy="7" r=".8" fill="currentColor"/><circle cx="8" cy="17" r=".8" fill="currentColor"/></svg></div><h3>Emby, Jellyfin, Navidrome</h3><p>Plus des dossiers sur l’appareil. L’adresse rapide à la maison, la seconde en déplacement – LiDio choisit tout seul.</p></div>
+      <div class="tile reveal d1"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5"/><path d="M5 19.5h14"/></svg></div><h3>Écouter hors ligne</h3><p>Téléchargez morceaux, albums et playlists sur l’appareil – l’un après l’autre, avec un anneau de progression sur chaque morceau.</p></div>
+      <div class="tile reveal d2"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></div><h3>Partager un morceau</h3><p>Un lien dans Signal & co – qui a LiDio touche le lien et écoute le morceau depuis sa propre bibliothèque.</p></div>
+      <div class="tile reveal"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></div><h3>Morceaux favoris et mix</h3><p>L’étoile est enregistrée sur votre serveur. Elle donne naissance au mix des favoris et à « Découvrir » avec ce que vous n’avez pas encore écouté.</p></div>
+      <div class="tile reveal d1"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11M4 12h11M4 17h7"/><path d="M18 14v6M15 17h6"/></svg></div><h3>File d’attente et lecture automatique</h3><p>À suivre, Historique, réorganiser – et quand la liste se termine, la lecture continue avec de la musique similaire de votre collection.</p></div>
+      <div class="tile reveal d2"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7"/><circle cx="12" cy="17" r=".6" fill="currentColor"/></svg></div><h3>Visite et guide</h3><p>Au premier lancement, une courte visite montre les endroits essentiels ; le guide se trouve dans l’app.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- PRIVACY -->
+<section id="datenschutz">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Confidentialité</p>
+      <h2 class="headline">Votre musique<br>reste chez vous.</h2>
+      <p class="lead">LiDio parle à votre serveur – et sinon uniquement là où vous l’activez vous-même. Pas de compte chez nous, rien dans un cloud.</p>
+    </div>
+    <div class="facts">
+      <div class="reveal"><div class="num gradient-text">0</div><div class="lbl">comptes, abonnements, achats</div></div>
+      <div class="reveal d1"><div class="num gradient-text">0</div><div class="lbl">publicité</div></div>
+      <div class="reveal d2"><div class="num gradient-text">0</div><div class="lbl">traqueurs et statistiques</div></div>
+      <div class="reveal d3"><div class="num gradient-text">100 %</div><div class="lbl">code source ouvert</div></div>
+    </div>
+    <p class="center lead reveal" style="margin-top: 40px; font-size: 17px">LiDio n’interroge les paroles (lrclib.net), les playlists Deezer et le musée des skins que lorsque vous les utilisez – et n’envoie que le nécessaire : titre et artiste, le terme recherché.</p>
+  </div>
+</section>
+
+<!-- DOWNLOAD -->
+<section id="laden" class="alt">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Télécharger</p>
+      <h2 class="headline">Lancez-vous. Gratuitement.</h2>
+      <p class="lead">Version 0.1 bêta – pour Android 10 et ultérieur ainsi qu’Ubuntu 24.04 et ultérieur.</p>
+    </div>
+    <div class="downloads">
+      <div class="download reveal">
+        <h3>Android</h3>
+        <div class="meta">APK · environ 12 Mo</div>
+        <div class="grow">
+          <p>Téléchargez et installez. LiDio demande les notifications (pour les commandes de lecture) – rien d’autre.</p>
+        </div>
+        <a class="btn" href="../download/LiDio-0.1b.apk">Télécharger l’APK</a>
+        <details><summary>Signature de l’app</summary>
+          <p>SHA-256: <code style="word-break: break-all">423d95a4d6f4740ecd1325b55705f26f8e5f43675d2368d58a0d4976d3c95b0b</code></p>
+        </details>
+      </div>
+      <div class="download reveal d1">
+        <h3>Ubuntu</h3>
+        <div class="meta">GTK 4 · Python · pour votre propre utilisateur</div>
+        <div class="grow">
+          <p>Décompressez et lancez <code class="inline">./install.sh</code> – LiDio apparaît dans le menu des applications. Le script compile aussi Milkdrop si vous le souhaitez.</p>
+        </div>
+        <a class="btn" href="../download/LiDio-0.1b-ubuntu.tar.gz">Télécharger pour Ubuntu</a>
+      </div>
+      <div class="download reveal d2">
+        <h3>Code source</h3>
+        <div class="meta">GPL-3.0 · sur GitHub</div>
+        <div class="grow">
+          <p>Chaque ligne consultable, y compris les bibliothèques fournies et leurs licences. Bugs ou idées bienvenus dans le gestionnaire de tickets.</p>
+        </div>
+        <a class="btn" href="https://github.com/veritasX1/LiDio">Aller sur GitHub</a>
+      </div>
+    </div>
+    <p class="center reveal" style="margin-top: 50px; font-size: 19px; font-weight: 600">Développé par Olaf Winkler dans le Schleswig-Holstein.</p>
+    <p class="center" style="margin-top: 10px; color: var(--muted); font-size: 15px">Sommes de contrôle : <a href="../download/SHA256SUMS">SHA256SUMS</a> · Bêta, car LiDio n’a encore été testé qu’avec peu de serveurs. Les images montrent une collection de démonstration inventée.</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap made">
+    <img src="../lidio.svg" alt="" width="34" height="34">
+    <p><b>Développé dans le Schleswig-Holstein.</b><br>Par Olaf Winkler – entre mer du Nord et mer Baltique.</p>
+  </div>
+  <div class="wrap cols">
+    <div>
+      <h4>LiDio</h4>
+      <p>Lecteur de musique pour votre propre serveur, pour Android et Ubuntu. Un projet privé et non commercial d’Olaf Winkler.</p>
+      <p>Logiciel libre sous <a href="https://github.com/veritasX1/LiDio/blob/main/LICENSE">GPL-3.0</a>. Milkdrop via <a href="https://github.com/projectM-visualizer/projectm">projectM</a> (LGPL-2.1), presets dans le domaine public.</p>
+    </div>
+    <div>
+      <h4>Confidentialité de ce site</h4>
+      <p>Pas de cookies, aucun contenu de serveurs tiers, aucun journal d’accès. Le JavaScript de ce site s’exécute uniquement dans votre navigateur et n’envoie rien.</p>
+    </div>
+    <div>
+      <h4>Remarque</h4>
+      <p class="legal">LiDio est un projet indépendant, sans lien avec Apple Inc., Winamp/Llama Group, Emby, Jellyfin, Navidrome, Deezer ou Spotify. Les noms cités appartiennent à leurs propriétaires. Les skins proviennent du Winamp Skin Museum de Jordan Eldredge et appartiennent à leurs créateurs. LiDio ne fournit aucune musique ni aucun graphisme ou police d’Apple.</p>
+    </div>
+  </div>
+<!--lang--><div class="wrap lang-foot"><a href="../" hreflang="de" lang="de">DE</a><a href="../en/" hreflang="en" lang="en">EN</a><a href="./" hreflang="fr" lang="fr" aria-current="true">FR</a></div><!--/lang-->
+</footer>
+
+<script src="../site.js"></script>
+</body>
+</html>
