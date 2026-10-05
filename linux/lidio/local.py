@@ -7,6 +7,7 @@ import hashlib, json, os, random, threading, time, urllib.parse
 from gi.repository import GLib
 
 from .servers import Album, Artist, Genre, Playlist, SearchResult, Track, Sharing, ServerError
+from .i18n import _
 
 ROOT = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "lidio", "lokal")
 AUDIO = {".mp3", ".flac", ".m4a", ".aac", ".ogg", ".oga", ".opus", ".wav", ".wma", ".aiff", ".aif", ".alac", ".ape", ".wv", ".mka", ".webm"}
@@ -133,8 +134,8 @@ class LocalLibrary:
                         elif pictures:
                             real = next(x for x in files if x.lower() == pictures[0])
                             cover = "datei:" + os.path.join(root, real)
-                        e = {"path": path, "mtime": mtime, "title": title or os.path.splitext(name)[0], "artist": artist or aartist or "Unbekannt",
-                             "albumartist": aartist or artist or "Unbekannt", "album": album or os.path.basename(root), "number": number, "disc": disc,
+                        e = {"path": path, "mtime": mtime, "title": title or os.path.splitext(name)[0], "artist": artist or aartist or _("Unbekannt"),
+                             "albumartist": aartist or artist or _("Unbekannt"), "album": album or os.path.basename(root), "number": number, "disc": disc,
                              "year": year, "genre": genre, "seconds": seconds, "cover": cover}
                     new[tid] = e
                     n += 1
@@ -177,7 +178,7 @@ class LocalLibrary:
     def check(self):
         if not self._all():
             self.scan()
-        return f"Auf diesem Computer · {len(self._all())} Titel"
+        return _("Auf diesem Computer · {count} Titel", count=len(self._all()))
 
     def albums(self, order="newest", size=100, offset=0):
         groups = self._albums()
@@ -196,7 +197,7 @@ class LocalLibrary:
     def album(self, album_id):
         g = self._albums().get(album_id)
         if not g:
-            raise ServerError("Dieses Album gibt es hier nicht mehr.")
+            raise ServerError(_("Dieses Album gibt es hier nicht mehr."))
         idx = self._all()
         tracks = sorted((self._track(i, idx[i]) for i in g["ids"]), key=lambda t: (t.disc or 0, t.number or 0, t.title.lower()))
         return self._album(album_id, g), tracks
@@ -209,7 +210,7 @@ class LocalLibrary:
 
     def artist(self, artist_id):
         albums = [self._album(a, g) for a, g in self._albums().items() if _id(g["e"]["albumartist"].lower()) == artist_id]
-        name = albums[0].artist if albums else "Unbekannt"
+        name = albums[0].artist if albums else _("Unbekannt")
         return Artist(artist_id, name), sorted(albums, key=lambda a: -(a.year or 0))
 
     def tracks(self, size=500, offset=0):
@@ -225,7 +226,7 @@ class LocalLibrary:
     def stream_url(self, track):
         e = self._all().get(track.id)
         if not e:
-            raise ServerError("Die Datei ist nicht mehr da.")
+            raise ServerError(_("Die Datei ist nicht mehr da."))
         return GLib.filename_to_uri(e["path"])
 
     def download_url(self, track):
@@ -354,7 +355,7 @@ class LocalLibrary:
         return None
 
     def share(self, playlist_id, users, everyone):
-        raise ServerError("Ordner auf diesem Computer lassen sich nicht freigeben.")
+        raise ServerError(_("Ordner auf diesem Computer lassen sich nicht freigeben."))
 
     def server_id(self):
         return ""

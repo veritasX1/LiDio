@@ -6,6 +6,7 @@ gi.require_version("Secret", "1")
 from gi.repository import Secret
 
 from .servers import MediaBrowser, Subsonic
+from .i18n import _
 
 SCHEMA = Secret.Schema.new("io.github.veritasx1.LiDio", Secret.SchemaFlags.NONE, {"account": Secret.SchemaAttributeType.STRING})
 FOLDER = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "lidio")
@@ -56,7 +57,7 @@ def secret(account):
 def add(kind, address, external, user, secret_value, name, user_id=""):
     data = _load()
     account = {"id": str(uuid.uuid4()), "kind": kind, "address": address, "external": external, "user": user, "name": name, "user_id": user_id}
-    Secret.password_store_sync(SCHEMA, {"account": account["id"]}, Secret.COLLECTION_DEFAULT, f"LiDio – {name}", secret_value, None)
+    Secret.password_store_sync(SCHEMA, {"account": account["id"]}, Secret.COLLECTION_DEFAULT, _("LiDio – {name}", name=name), secret_value, None)
     data["accounts"].append(account); data["active"] = account["id"]; _save(data)
     return account
 

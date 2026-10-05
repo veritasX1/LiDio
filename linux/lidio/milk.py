@@ -5,6 +5,7 @@ import ctypes, os, random, threading
 import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import GLib, Gtk, Gdk
+from .i18n import _
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRESETS = os.path.join(HERE, "data", "milkdrop")
@@ -46,7 +47,7 @@ def presets():
 
 class MilkWindow(Gtk.Window):
     def __init__(self, app):
-        super().__init__(application=app, title="LiDio – Milkdrop", default_width=800, default_height=500)
+        super().__init__(application=app, title=_("LiDio – Milkdrop"), default_width=800, default_height=500)
         self.app, self.player = app, app.player
         self.list = presets()
         self.index = random.randrange(len(self.list)) if self.list else 0

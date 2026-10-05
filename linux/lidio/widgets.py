@@ -4,6 +4,7 @@ import math
 import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk
+from .i18n import _
 
 
 class Ring(Gtk.DrawingArea):
@@ -42,9 +43,9 @@ class Where(Gtk.Stack):
         super().__init__(valign=Gtk.Align.CENTER, transition_type=Gtk.StackTransitionType.CROSSFADE)
         self.offline, self.track = offline, track
         local = Gtk.Image.new_from_icon_name("computer-symbolic"); local.add_css_class("where")
-        local.set_tooltip_text("Auf diesem Computer")
+        local.set_tooltip_text(_("Auf diesem Computer"))
         self.add_named(local, "local")
-        load = Gtk.Button(icon_name="network-server-symbolic", css_classes=["flat", "where-button"], tooltip_text="Auf diesem Computer laden")
+        load = Gtk.Button(icon_name="network-server-symbolic", css_classes=["flat", "where-button"], tooltip_text=_("Auf diesem Computer laden"))
         load.update_property([Gtk.AccessibleProperty.LABEL], ["Auf diesem Computer laden"])
         load.connect("clicked", lambda *_: offline.download([track]))
         self.add_named(load, "server")
@@ -57,7 +58,7 @@ class Where(Gtk.Stack):
             self.set_visible_child_name("local")
         elif s in ("loading", "waiting"):
             self.ring.set(self.offline.live.get(self.track.id), waiting=s == "waiting")
-            self.ring.set_tooltip_text("Wird geladen …" if s == "loading" else "Wartet aufs Laden")
+            self.ring.set_tooltip_text(_("Wird geladen …") if s == "loading" else _("Wartet aufs Laden"))
             self.set_visible_child_name("ring")
         else:
             self.set_visible_child_name("server")
@@ -82,11 +83,11 @@ class DownloadButton(Gtk.Button):
         if busy:
             done = there + sum(off.live.get(i, 0) for i in ids)
             self.ring.set(done / max(1, total)); self.set_child(self.ring)
-            tip = f"Wird geladen – {there} von {total}. Klicken zum Stoppen."
+            tip = _("Wird geladen – {there} von {total}. Klicken zum Stoppen.", there=there, total=total)
         elif total and there == total:
-            self.set_icon_name("object-select-symbolic"); tip = f"Alle {total} Titel auf diesem Computer"
+            self.set_icon_name("object-select-symbolic"); tip = _("Alle {total} Titel auf diesem Computer", total=total)
         else:
-            self.set_icon_name("folder-download-symbolic"); tip = "Auf diesem Computer laden" + (f" ({there} von {total} schon da)" if there else "")
+            self.set_icon_name("folder-download-symbolic"); tip = _("Auf diesem Computer laden") + (_(" ({there} von {total} schon da)", there=there, total=total) if there else "")
         self.set_tooltip_text(tip)
         self.update_property([Gtk.AccessibleProperty.LABEL], [tip])
 
@@ -97,14 +98,14 @@ class DownloadButton(Gtk.Button):
         off = self.window.app.offline
         ids = {t.id for t in self.tracks}
         if any(i in off.waiting or i in off.live for i in ids):
-            d = Adw.AlertDialog(heading="Laden abbrechen?", body="Was schon da ist, bleibt auf diesem Computer.")
-            d.add_response("weiter", "Weiter laden"); d.add_response("stop", "Laden stoppen")
+            d = Adw.AlertDialog(heading=_("Laden abbrechen?"), body=_("Was schon da ist, bleibt auf diesem Computer."))
+            d.add_response("weiter", _("Weiter laden")); d.add_response("stop", _("Laden stoppen"))
             d.set_response_appearance("stop", Adw.ResponseAppearance.DESTRUCTIVE)
             d.connect("response", lambda d, r: off.cancel() if r == "stop" else None)
             d.present(self.window)
         elif all(i in off.index for i in ids):
-            d = Adw.AlertDialog(heading="Von diesem Computer entfernen?", body="Die Titel bleiben auf dem Server und lassen sich jederzeit wieder laden.")
-            d.add_response("nein", "Abbrechen"); d.add_response("weg", "Entfernen")
+            d = Adw.AlertDialog(heading=_("Von diesem Computer entfernen?"), body=_("Die Titel bleiben auf dem Server und lassen sich jederzeit wieder laden."))
+            d.add_response("nein", _("Abbrechen")); d.add_response("weg", _("Entfernen"))
             d.set_response_appearance("weg", Adw.ResponseAppearance.DESTRUCTIVE)
             d.connect("response", lambda d, r: off.remove(self.tracks) if r == "weg" else None)
             d.present(self.window)

@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -96,7 +98,7 @@ fun ModernChrome(state: AppState, server: MusicServer, modifier: Modifier = Modi
                 // Shrunk: only the current tab, as a circle (in Search the search circle on the right is that already);
                 // a tap brings the whole bar back.
                 if (state.tab != Tab.Search) Box(Modifier.size(56.dp).glass(CircleShape).clickable(role = Role.Button) { state.chromeSmall = false }
-                    .semantics { contentDescription = "${state.tab.label} – Leiste zeigen" }, contentAlignment = Alignment.Center) {
+                    .semantics { contentDescription = tr("{label} – Leiste zeigen", "label" to state.tab.label) }, contentAlignment = Alignment.Center) {
                     SymbolIcon(state.tab.symbol, ink.tint, 24.dp, filled = true)
                 }
                 if (state.tab != Tab.Search) Spacer(Modifier.width(10.dp))
@@ -125,7 +127,7 @@ private fun MiniCapsule(state: AppState, server: MusicServer, track: Track, modi
     val ink = Ink
     val playback = state.playback
     Row(modifier.height(56.dp).glass(RoundedCornerShape(28.dp))
-        .clickable(onClickLabel = "Wiedergabe öffnen") { state.nowPlaying = true }.padding(start = 8.dp, end = 6.dp),
+        .clickable(onClickLabel = tr("Wiedergabe öffnen")) { state.nowPlaying = true }.padding(start = 8.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Cover(server.cover(track, 120), Modifier.size(40.dp), 20.dp)
         Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
@@ -133,11 +135,11 @@ private fun MiniCapsule(state: AppState, server: MusicServer, track: Track, modi
             Label(track.artist, 13f, color = ink.secondary)
         }
         Box(Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button) { playback.toggle() }
-            .semantics { contentDescription = if (playback.playing) "Pause" else "Wiedergabe" }, contentAlignment = Alignment.Center) {
+            .semantics { contentDescription = if (playback.playing) tr("Pause") else tr("Wiedergabe") }, contentAlignment = Alignment.Center) {
             SymbolIcon(if (playback.playing) Symbol.Pause else Symbol.Play, ink.label, 22.dp, filled = true)
         }
         if (!state.chromeSmall) Box(Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button) { playback.next() }
-            .semantics { contentDescription = "Nächster Titel" }, contentAlignment = Alignment.Center) {
+            .semantics { contentDescription = tr("Nächster Titel") }, contentAlignment = Alignment.Center) {
             SymbolIcon(Symbol.Forward, ink.label, 24.dp, filled = true)
         }
     }

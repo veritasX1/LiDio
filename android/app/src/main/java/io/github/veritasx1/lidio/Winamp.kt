@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.Context
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
@@ -96,7 +98,7 @@ class Skin(val name: String, private val sheets: Map<String, ImageBitmap>, val v
         private var builtIn: Skin? = null
 
         /** LiDio Graphit, from the app's assets. */
-        fun builtIn(context: Context): Skin = builtIn ?: context.assets.open("skins/lidio.wsz").use { read("LiDio Graphit", it, null) }.also { builtIn = it }
+        fun builtIn(context: Context): Skin = builtIn ?: context.assets.open("skins/lidio.wsz").use { read(tr("LiDio Graphit"), it, null) }.also { builtIn = it }
 
         /** Reads a .wsz (a zip): names in any case and in any folder; what a skin lacks comes from `fallback`
          *  (balance from volume and the numbers from each other first, as Winamp does). */
@@ -128,7 +130,7 @@ class Skin(val name: String, private val sheets: Map<String, ImageBitmap>, val v
             val pl = files["pledit.txt"]?.let { parsePledit(String(it, Charsets.ISO_8859_1)) } ?: emptyMap()
             fun colour(key: String, default: Color?) = pl[key.lowercase()]?.let { parseColour(it) } ?: default ?: Color.White
             return Skin(name, sheets, vis,
-                colour("Normal", fallback?.normal ?: Color(0xFF00FF00)), colour("Current", fallback?.current ?: Color.White),
+                colour(tr("Normal"), fallback?.normal ?: Color(0xFF00FF00)), colour("Current", fallback?.current ?: Color.White),
                 colour("NormalBG", fallback?.normalBg ?: Color.Black), colour("SelectedBG", fallback?.selectedBg ?: Color(0xFF0000C6)))
         }
 
@@ -401,40 +403,40 @@ internal fun MainWindow(state: AppState, skin: Skin, k: Scale, onLibrary: () -> 
         }
         Visualizer(skin, k, p.playing && p.controller != null, w, onOptions = { visOptions = true })   // previews have no sound
         // Title bar.
-        SkinButton(skin, k, "MAIN_OPTIONS_BUTTON", 6, 3, "Optionen", "MAIN_OPTIONS_BUTTON_DEPRESSED", onClick = onMenu)
-        SkinButton(skin, k, "MAIN_MINIMIZE_BUTTON", 244, 3, "Mediathek", "MAIN_MINIMIZE_BUTTON_DEPRESSED", onClick = onLibrary)
+        SkinButton(skin, k, "MAIN_OPTIONS_BUTTON", 6, 3, tr("Optionen"), "MAIN_OPTIONS_BUTTON_DEPRESSED", onClick = onMenu)
+        SkinButton(skin, k, "MAIN_MINIMIZE_BUTTON", 244, 3, tr("Mediathek"), "MAIN_MINIMIZE_BUTTON_DEPRESSED", onClick = onLibrary)
         SkinButton(skin, k, "MAIN_SHADE_BUTTON", 254, 3, "Fensteroptionen", "MAIN_SHADE_BUTTON_DEPRESSED", onClick = onMenu)
-        SkinButton(skin, k, "MAIN_CLOSE_BUTTON", 264, 3, "Winamp-Ansicht schließen", "MAIN_CLOSE_BUTTON_DEPRESSED", onClick = onLibrary)
+        SkinButton(skin, k, "MAIN_CLOSE_BUTTON", 264, 3, tr("Winamp-Ansicht schließen"), "MAIN_CLOSE_BUTTON_DEPRESSED", onClick = onLibrary)
         // Time: tap switches elapsed / remaining.
-        Box(Modifier.place(k, 36, 26, 63, 13).clickable(role = Role.Button, onClickLabel = "Restzeit umschalten") { w.remaining = !w.remaining; w.save() }
+        Box(Modifier.place(k, 36, 26, 63, 13).clickable(role = Role.Button, onClickLabel = tr("Restzeit umschalten")) { w.remaining = !w.remaining; w.save() }
             .semantics { contentDescription = if (w.remaining) "Restzeit" else "Spielzeit" })
         // Volume, balance, position.
-        Box(Modifier.place(k, 107, 57, 68, 13).slide({ p.volume }, "Lautstärke", change = { p.changeVolume(it) }))
-        Box(Modifier.place(k, 177, 57, 38, 13).slide({ (w.balance + 1) / 2 }, "Balance", change = { v ->
+        Box(Modifier.place(k, 107, 57, 68, 13).slide({ p.volume }, tr("Lautstärke"), change = { p.changeVolume(it) }))
+        Box(Modifier.place(k, 177, 57, 38, 13).slide({ (w.balance + 1) / 2 }, tr("Balance"), change = { v ->
             w.balance = (v * 2 - 1).let { if (abs(it) < 0.08f) 0f else it }; Dsp.set(w.eqOn, w.preamp, w.bands.toList(), w.balance) }, release = { w.save() }))
-        Box(Modifier.place(k, 16, 72, 248, 10).slide({ if (p.length > 0) p.position.toFloat() / p.length else 0f }, "Position",
+        Box(Modifier.place(k, 16, 72, 248, 10).slide({ if (p.length > 0) p.position.toFloat() / p.length else 0f }, tr("Position"),
             change = { seeking = it }, release = { seeking?.let { f -> p.seek((f * p.length).toLong()) }; seeking = null }))
         // Windows.
-        SkinButton(skin, k, if (w.eq) "MAIN_EQ_BUTTON_SELECTED" else "MAIN_EQ_BUTTON", 219, 58, "Equalizer",
+        SkinButton(skin, k, if (w.eq) "MAIN_EQ_BUTTON_SELECTED" else "MAIN_EQ_BUTTON", 219, 58, tr("Equalizer"),
             if (w.eq) "MAIN_EQ_BUTTON_DEPRESSED_SELECTED" else "MAIN_EQ_BUTTON_DEPRESSED", if (w.eq) "an" else "aus") { w.eq = !w.eq; w.save() }
         SkinButton(skin, k, if (w.playlist) "MAIN_PLAYLIST_BUTTON_SELECTED" else "MAIN_PLAYLIST_BUTTON", 242, 58, "Playlist",
             if (w.playlist) "MAIN_PLAYLIST_BUTTON_DEPRESSED_SELECTED" else "MAIN_PLAYLIST_BUTTON_DEPRESSED", if (w.playlist) "an" else "aus") { w.playlist = !w.playlist; w.save() }
         // Transport.
-        SkinButton(skin, k, "MAIN_PREVIOUS_BUTTON", 16, 88, "Zurück") { p.previous() }
-        SkinButton(skin, k, "MAIN_PLAY_BUTTON", 39, 88, "Wiedergabe") {
+        SkinButton(skin, k, "MAIN_PREVIOUS_BUTTON", 16, 88, tr("Zurück")) { p.previous() }
+        SkinButton(skin, k, "MAIN_PLAY_BUTTON", 39, 88, tr("Wiedergabe")) {
             p.controller?.run { if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) { seekTo(0); prepare() }; play() }; p.refresh()
         }
-        SkinButton(skin, k, "MAIN_PAUSE_BUTTON", 62, 88, "Pause") { if (p.playing) p.toggle() else if (track != null) p.toggle() }
-        SkinButton(skin, k, "MAIN_STOP_BUTTON", 85, 88, "Stopp") { p.controller?.run { pause(); seekTo(0) }; p.refresh() }
-        SkinButton(skin, k, "MAIN_NEXT_BUTTON", 108, 88, "Weiter") { p.next() }
+        SkinButton(skin, k, "MAIN_PAUSE_BUTTON", 62, 88, tr("Pause")) { if (p.playing) p.toggle() else if (track != null) p.toggle() }
+        SkinButton(skin, k, "MAIN_STOP_BUTTON", 85, 88, tr("Stopp")) { p.controller?.run { pause(); seekTo(0) }; p.refresh() }
+        SkinButton(skin, k, "MAIN_NEXT_BUTTON", 108, 88, tr("Weiter")) { p.next() }
         // Winamp's lightning bolt (the "about" corner): back to LiDio's normal view.
         if (onBolt != null) Box(Modifier.place(k, 253, 91, 13, 15).clickable(role = Role.Button, onClick = onBolt)
-            .semantics { contentDescription = "Zur normalen Ansicht" })
-        SkinButton(skin, k, "MAIN_EJECT_BUTTON", 136, 89, "Titel aus der Mediathek wählen", onClick = onLibrary)
+            .semantics { contentDescription = tr("Zur normalen Ansicht") })
+        SkinButton(skin, k, "MAIN_EJECT_BUTTON", 136, 89, tr("Titel aus der Mediathek wählen"), onClick = onLibrary)
         val shuffle = p.shuffle; val repeat = p.repeat != Player.REPEAT_MODE_OFF
-        SkinButton(skin, k, if (shuffle) "MAIN_SHUFFLE_BUTTON_SELECTED" else "MAIN_SHUFFLE_BUTTON", 164, 89, "Zufall",
+        SkinButton(skin, k, if (shuffle) "MAIN_SHUFFLE_BUTTON_SELECTED" else "MAIN_SHUFFLE_BUTTON", 164, 89, tr("Zufall"),
             if (shuffle) "MAIN_SHUFFLE_BUTTON_SELECTED_DEPRESSED" else "MAIN_SHUFFLE_BUTTON_DEPRESSED", if (shuffle) "an" else "aus") { p.toggleShuffle() }
-        SkinButton(skin, k, if (repeat) "MAIN_REPEAT_BUTTON_SELECTED" else "MAIN_REPEAT_BUTTON", 210, 89, "Wiederholen",
+        SkinButton(skin, k, if (repeat) "MAIN_REPEAT_BUTTON_SELECTED" else "MAIN_REPEAT_BUTTON", 210, 89, tr("Wiederholen"),
             if (repeat) "MAIN_REPEAT_BUTTON_SELECTED_DEPRESSED" else "MAIN_REPEAT_BUTTON_DEPRESSED", if (repeat) "an" else "aus") {
             // Winamp knows only on/off: all titles, or nothing.
             p.controller?.repeatMode = if (repeat) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ALL; p.refresh()
@@ -461,10 +463,10 @@ private fun Visualizer(skin: Skin, k: Scale, playing: Boolean, w: WinampSettings
     val c = skin.vis
     fun colour(i: Int) = c.getOrElse(i) { c.lastOrNull() ?: Color.Green }
     Canvas(Modifier.place(k, 24, 43, 76, 16)
-        .combinedClickable(role = Role.Button, onClickLabel = "Anzeige wechseln", onLongClickLabel = "Optionen", onLongClick = onOptions) {
+        .combinedClickable(role = Role.Button, onClickLabel = tr("Anzeige wechseln"), onLongClickLabel = tr("Optionen"), onLongClick = onOptions) {
             w.vis = (w.vis + 1) % 3; w.save()
         }
-        .semantics { contentDescription = "Visualisierung: " + listOf("Spektrum", "Oszilloskop", "aus")[w.vis] }) {
+        .semantics { contentDescription = "Visualisierung: " + listOf(tr("Spektrum"), tr("Oszilloskop"), "aus")[w.vis] }) {
         frame   // read, so every frame draws
         if (w.vis == 2) return@Canvas
         val px = size.width / 76f; val py = size.height / 16f
@@ -513,13 +515,13 @@ private fun VisOptions(w: WinampSettings, onClose: () -> Unit) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
         Column(Modifier.widthIn(max = 340.dp).clip(RoundedCornerShape(14.dp)).background(ink.elevated).padding(bottom = 8.dp)) {
             Label("Visualisierung", 17f, 600, modifier = Modifier.padding(start = 16.dp, top = 16.dp))
-            pick("ANZEIGE", listOf("Spektrum", "Oszilloskop", "Aus"), w.vis) { w.vis = it }()
-            pick("SPEKTRUM", listOf("Normal", "Fire", "Line"), w.visStyle) { w.visStyle = it }()
+            pick("ANZEIGE", listOf(tr("Spektrum"), tr("Oszilloskop"), "Aus"), w.vis) { w.vis = it }()
+            pick("SPEKTRUM", listOf(tr("Normal"), "Fire", "Line"), w.visStyle) { w.visStyle = it }()
             pick("BALKEN", listOf("Dünn", "Dick"), if (w.visThick) 1 else 0) { w.visThick = it == 1 }()
             pick("OSZILLOSKOP", listOf("Dots", "Lines", "Solid"), w.scopeStyle) { w.scopeStyle = it }()
             ListRow("Spitzen", height = 48.dp, separator = false, modifier = Modifier.padding(top = 8.dp),
                 trailing = { IosSwitch(w.visPeaks, "Spitzen") { w.visPeaks = it; w.save() } })
-            ListRow("Fertig", titleColor = ink.tint, separator = false, onClick = onClose)
+            ListRow(tr("Fertig"), titleColor = ink.tint, separator = false, onClick = onClose)
         }
     }
 }
@@ -547,18 +549,18 @@ private fun EqWindow(state: AppState, skin: Skin, k: Scale) {
             slider(21, w.preamp, -1)
             w.bands.forEachIndexed { i, v -> slider(78 + i * 18, v, i) }
         }
-        SkinButton(skin, k, if (w.eqOn) "EQ_ON_BUTTON_SELECTED" else "EQ_ON_BUTTON", 14, 18, "Equalizer an",
+        SkinButton(skin, k, if (w.eqOn) "EQ_ON_BUTTON_SELECTED" else "EQ_ON_BUTTON", 14, 18, tr("Equalizer an"),
             if (w.eqOn) "EQ_ON_BUTTON_SELECTED_DEPRESSED" else "EQ_ON_BUTTON_DEPRESSED", if (w.eqOn) "an" else "aus") { w.eqOn = !w.eqOn; w.save() }
         SkinButton(skin, k, if (w.eqAuto) "EQ_AUTO_BUTTON_SELECTED" else "EQ_AUTO_BUTTON", 40, 18, "Automatisch",
             if (w.eqAuto) "EQ_AUTO_BUTTON_SELECTED_DEPRESSED" else "EQ_AUTO_BUTTON_DEPRESSED", if (w.eqAuto) "an" else "aus") { w.eqAuto = !w.eqAuto; w.save() }
-        SkinButton(skin, k, "EQ_PRESETS_BUTTON", 217, 18, "Voreinstellungen: alles auf 0", "EQ_PRESETS_BUTTON_SELECTED") {
+        SkinButton(skin, k, "EQ_PRESETS_BUTTON", 217, 18, tr("Voreinstellungen: alles auf 0"), "EQ_PRESETS_BUTTON_SELECTED") {
             w.preamp = 0f; for (i in w.bands.indices) w.bands[i] = 0f; w.save()
         }
-        SkinButton(skin, k, "EQ_CLOSE_BUTTON", 264, 3, "Equalizer ausblenden", "EQ_CLOSE_BUTTON_ACTIVE") { w.eq = false; w.save() }
+        SkinButton(skin, k, "EQ_CLOSE_BUTTON", 264, 3, tr("Equalizer ausblenden"), "EQ_CLOSE_BUTTON_ACTIVE") { w.eq = false; w.save() }
         fun db(v: Float) = ((v * 24f - 12f) * 2).roundToInt() / 2f   // half-dB steps; 0 snaps
-        Box(Modifier.place(k, 21, 38, 14, 63).slide({ (w.preamp + 12f) / 24f }, "Vorverstärkung", vertical = true,
+        Box(Modifier.place(k, 21, 38, 14, 63).slide({ (w.preamp + 12f) / 24f }, tr("Vorverstärkung"), vertical = true,
             change = { dragging = -1; w.preamp = db(it); Dsp.set(w.eqOn, w.preamp, w.bands.toList(), w.balance) }, release = { dragging = -2; w.save() }))
-        for (i in 0 until 10) Box(Modifier.place(k, 78 + i * 18, 38, 14, 63).slide({ (w.bands[i] + 12f) / 24f }, "${EQ_BANDS[i]} Hz",
+        for (i in 0 until 10) Box(Modifier.place(k, 78 + i * 18, 38, 14, 63).slide({ (w.bands[i] + 12f) / 24f }, tr("{value} Hz", "value" to (EQ_BANDS[i])),
             vertical = true, change = { dragging = i; w.bands[i] = db(it); Dsp.set(w.eqOn, w.preamp, w.bands.toList(), w.balance) }, release = { dragging = -2; w.save() }))
     }
 }
@@ -645,12 +647,12 @@ internal fun PlaylistWindow(state: AppState, skin: Skin, k: Scale, width: Int, h
             }
         }
         // Bottom buttons: ADD → the library, REM → the selected title, SEL → none, MISC / LIST → options.
-        Box(Modifier.place(k, 14, height - 30, 25, 18).clickable(role = Role.Button, onClickLabel = "Titel hinzufügen", onClick = onAdd)
-            .semantics { contentDescription = "Titel hinzufügen" })
+        Box(Modifier.place(k, 14, height - 30, 25, 18).clickable(role = Role.Button, onClickLabel = tr("Titel hinzufügen"), onClick = onAdd)
+            .semantics { contentDescription = tr("Titel hinzufügen") })
         Box(Modifier.place(k, 43, height - 30, 25, 18).clickable(role = Role.Button) {
             if (locked) onAdd() else if (selected in queue.indices) { p.remove(selected); selected = -1 }
-        }.semantics { contentDescription = "Ausgewählten Titel entfernen" })
-        Box(Modifier.place(k, 72, height - 30, 25, 18).clickable(role = Role.Button) { selected = -1 }.semantics { contentDescription = "Auswahl aufheben" })
+        }.semantics { contentDescription = tr("Ausgewählten Titel entfernen") })
+        Box(Modifier.place(k, 72, height - 30, 25, 18).clickable(role = Role.Button) { selected = -1 }.semantics { contentDescription = tr("Auswahl aufheben") })
         Box(Modifier.place(k, 101, height - 30, 25, 18).clickable(role = Role.Button, onClick = onMenu).semantics { contentDescription = "Playlist-Optionen" })
         Box(Modifier.place(k, width - 44, height - 30, 25, 18).clickable(role = Role.Button, onClick = onMenu).semantics { contentDescription = "Listenoptionen" })
     }
@@ -666,14 +668,14 @@ private fun WinampMenu(state: AppState, onLibrary: () -> Unit, onClose: () -> Un
     val w = state.winamp
     androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
         Column(Modifier.widthIn(max = 300.dp).clip(RoundedCornerShape(14.dp)).background(ink.elevated)) {
-            ListRow(if (w.eq) "Equalizer ausblenden" else "Equalizer einblenden", onClick = { w.eq = !w.eq; w.save(); onClose() })
-            ListRow(if (w.playlist) "Playlist ausblenden" else "Playlist einblenden", onClick = { w.playlist = !w.playlist; w.save(); onClose() })
-            ListRow("Skin wählen …", onClick = { onClose(); onLibrary(); state.open(Route.Skins) })
+            ListRow(if (w.eq) tr("Equalizer ausblenden") else tr("Equalizer einblenden"), onClick = { w.eq = !w.eq; w.save(); onClose() })
+            ListRow(if (w.playlist) tr("Playlist ausblenden") else tr("Playlist einblenden"), onClick = { w.playlist = !w.playlist; w.save(); onClose() })
+            ListRow(tr("Skin wählen …"), onClick = { onClose(); onLibrary(); state.open(Route.Skins) })
             // Winamp's Ctrl+Shift+K: Milkdrop.
-            if (Milk.loaded) ListRow(if (w.milk) "Playlist statt Milkdrop" else "Milkdrop im Fenster", onClick = { w.milk = !w.milk; w.playlist = true; w.save(); onClose() })
-            if (Milk.loaded) ListRow("Milkdrop als Vollbild", onClick = { onClose(); state.milk = true })
-            ListRow("Mediathek", onClick = { onClose(); onLibrary() })
-            ListRow("Zur normalen Ansicht", separator = false, titleColor = ink.tint, onClick = { w.on = false; w.save(); onClose() })
+            if (Milk.loaded) ListRow(if (w.milk) tr("Playlist statt Milkdrop") else tr("Milkdrop im Fenster"), onClick = { w.milk = !w.milk; w.playlist = true; w.save(); onClose() })
+            if (Milk.loaded) ListRow(tr("Milkdrop als Vollbild"), onClick = { onClose(); state.milk = true })
+            ListRow(tr("Mediathek"), onClick = { onClose(); onLibrary() })
+            ListRow(tr("Zur normalen Ansicht"), separator = false, titleColor = ink.tint, onClick = { w.on = false; w.save(); onClose() })
         }
     }
 }

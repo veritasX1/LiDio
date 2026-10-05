@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -95,7 +97,7 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
             detectVerticalDragGestures(onDragEnd = { if (drag > 220f) onClose(); drag = 0f }) { _, dy -> drag = (drag + dy).coerceAtLeast(0f) }
         }
         .windowInsetsPadding(WindowInsets.statusBars).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 28.dp)) {
-        Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp).clickable(onClickLabel = "Schließen", onClick = onClose), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp).clickable(onClickLabel = tr("Schließen"), onClick = onClose), contentAlignment = Alignment.Center) {
             Box(Modifier.size(36.dp, 5.dp).clip(CircleShape).background(soft))
         }
         if (track == null) { Spacer(Modifier.weight(1f)); return@Column }
@@ -112,11 +114,11 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
                 Column(Modifier.weight(1f).padding(start = 12.dp)) { Label(track.title, 17f, 600, white); Label(track.artist, 15f, color = soft) }
             }
             Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Toggle(Symbol.Shuffle, "Zufall", playback.shuffle, Modifier.weight(1f)) { playback.toggleShuffle() }
-                Toggle(if (playback.repeat == Player.REPEAT_MODE_ONE) Symbol.RepeatOne else Symbol.Repeat, "Wiederholen",
+                Toggle(Symbol.Shuffle, tr("Zufall"), playback.shuffle, Modifier.weight(1f)) { playback.toggleShuffle() }
+                Toggle(if (playback.repeat == Player.REPEAT_MODE_ONE) Symbol.RepeatOne else Symbol.Repeat, tr("Wiederholen"),
                     playback.repeat != Player.REPEAT_MODE_OFF, Modifier.weight(1f)) { playback.cycleRepeat() }
                 // iOS: the third button – Autoplay ∞ goes on with similar music when the queue ends.
-                Toggle(Symbol.Infinity, "Autoplay", playback.autoplay, Modifier.weight(1f)) { playback.toggleAutoplay() }
+                Toggle(Symbol.Infinity, tr("Autoplay"), playback.autoplay, Modifier.weight(1f)) { playback.toggleAutoplay() }
             }
             QueueView(playback, server, Modifier.weight(1f))
         } else {
@@ -135,13 +137,13 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
                 val fav = playback.isFavorite(track)
                 Box(Modifier.padding(end = 10.dp).size(32.dp).clip(CircleShape).background(white.copy(alpha = 0.15f))
                     .clickable(role = Role.Button) { playback.toggleFavorite(track) }
-                    .semantics { contentDescription = if (fav) "Aus Favoriten entfernen" else "Favorit" }, contentAlignment = Alignment.Center) {
+                    .semantics { contentDescription = if (fav) tr("Aus Favoriten entfernen") else "Favorit" }, contentAlignment = Alignment.Center) {
                     SymbolIcon(Symbol.Star, white, 16.dp, filled = fav)
                 }
                 Box {
                     Box(Modifier.size(32.dp).clip(CircleShape).background(white.copy(alpha = 0.15f))
-                        .clickable(role = Role.Button, onClickLabel = "Mehr") { more = true }
-                        .semantics { contentDescription = "Mehr" }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Ellipsis, white, 18.dp) }
+                        .clickable(role = Role.Button, onClickLabel = tr("Mehr")) { more = true }
+                        .semantics { contentDescription = tr("Mehr") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Ellipsis, white, 18.dp) }
                     if (more) NowPlayingMenu(state, server, track, onVideo = { video = true }, onClose = onClose) { more = false }
                 }
             }
@@ -150,7 +152,7 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
         // Scrubber with times – live while dragging, the jump happens on release.
         val length = playback.length.coerceAtLeast(1)
         val fraction = scrubbing ?: (playback.position.toFloat() / length).coerceIn(0f, 1f)
-        IosSlider(fraction, { scrubbing = it }, "Position im Titel", Modifier.padding(top = 18.dp), fill = white.copy(alpha = 0.9f),
+        IosSlider(fraction, { scrubbing = it }, tr("Position im Titel"), Modifier.padding(top = 18.dp), fill = white.copy(alpha = 0.9f),
             track = white.copy(alpha = 0.25f), thumb = false, onRelease = { scrubbing?.let { playback.seek((it * length).toLong()) }; scrubbing = null })
         Row(Modifier.fillMaxWidth()) {
             Label(duration(((fraction * length) / 1000).toInt()), 12f, 500, soft, tabular = true)
@@ -159,14 +161,14 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
         }
 
         Row(Modifier.fillMaxWidth().padding(vertical = 18.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            Big(Symbol.Backward, "Zurück", 40.dp) { playback.previous() }
-            Big(if (playback.playing) Symbol.Pause else Symbol.Play, if (playback.playing) "Pause" else "Wiedergabe", 52.dp) { playback.toggle() }
-            Big(Symbol.Forward, "Weiter", 40.dp) { playback.next() }
+            Big(Symbol.Backward, tr("Zurück"), 40.dp) { playback.previous() }
+            Big(if (playback.playing) Symbol.Pause else Symbol.Play, if (playback.playing) tr("Pause") else tr("Wiedergabe"), 52.dp) { playback.toggle() }
+            Big(Symbol.Forward, tr("Weiter"), 40.dp) { playback.next() }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             SymbolIcon(Symbol.SpeakerLow, soft, 16.dp)
-            IosSlider(playback.volume, { playback.changeVolume(it) }, "Lautstärke", Modifier.weight(1f).padding(horizontal = 10.dp),
+            IosSlider(playback.volume, { playback.changeVolume(it) }, tr("Lautstärke"), Modifier.weight(1f).padding(horizontal = 10.dp),
                 fill = white.copy(alpha = 0.9f), track = white.copy(alpha = 0.25f), thumb = false)
             SymbolIcon(Symbol.SpeakerHigh, soft, 18.dp)
         }
@@ -174,8 +176,8 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             // No text found: the button stays dim and does nothing – the listener is never disturbed (card 7ac89c11).
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(if (showLyrics) white.copy(alpha = 0.25f) else Color.Transparent)
-                .clickable(role = Role.Button, enabled = lyrics != null, onClickLabel = "Liedtext") { showLyrics = !showLyrics; showQueue = false }
-                .semantics { contentDescription = if (lyrics != null) "Liedtext" else "Kein Liedtext" }, contentAlignment = Alignment.Center) {
+                .clickable(role = Role.Button, enabled = lyrics != null, onClickLabel = tr("Liedtext")) { showLyrics = !showLyrics; showQueue = false }
+                .semantics { contentDescription = if (lyrics != null) tr("Liedtext") else tr("Kein Liedtext") }, contentAlignment = Alignment.Center) {
                 SymbolIcon(Symbol.Quote, if (showLyrics) white else if (lyrics != null) soft else white.copy(alpha = 0.2f), 22.dp)
             }
             // The Winamp view – a gimmick, one tap away; LiDio remembers which view was last.
@@ -183,13 +185,13 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
                 .clickable(role = Role.Button, onClickLabel = "Winamp-Ansicht") { state.winamp.on = true; state.winamp.save() }
                 .semantics { contentDescription = "Winamp-Ansicht" }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Bolt, soft, 22.dp) }
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(if (showQueue) white.copy(alpha = 0.25f) else Color.Transparent)
-                .clickable(role = Role.Button, onClickLabel = "Als Nächstes") { showQueue = !showQueue; showLyrics = false }.semantics { contentDescription = "Als Nächstes" },
+                .clickable(role = Role.Button, onClickLabel = tr("Als Nächstes")) { showQueue = !showQueue; showLyrics = false }.semantics { contentDescription = tr("Als Nächstes") },
                 contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Queue, if (showQueue) white else soft, 22.dp) }
         }
     }
     // Card 5ef5e3c8: short hints the first time(s), per help level.
-    var hint by remember { mutableStateOf(if (Help.hint(context, "jetztLaeuft")) "Nach unten wischen schließt „Jetzt läuft“." else null) }
-    LaunchedEffect(showQueue) { if (showQueue && Help.hint(context, "warteschlange")) hint = "Am Griff ≡ ziehen sortiert um, nach links wischen entfernt." }
+    var hint by remember { mutableStateOf(if (Help.hint(context, "jetztLaeuft")) tr("Nach unten wischen schließt „Jetzt läuft“.") else null) }
+    LaunchedEffect(showQueue) { if (showQueue && Help.hint(context, "warteschlange")) hint = tr("Am Griff ≡ ziehen sortiert um, nach links wischen entfernt.") }
     LaunchedEffect(hint) { if (hint != null) { kotlinx.coroutines.delay(4000); hint = null } }
     hint?.let { HintPill(it, Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.statusBars).padding(top = 24.dp)) }
     if (video && track != null) VideoScreen(state, track) { video = false }
@@ -226,14 +228,14 @@ private fun NowPlayingMenu(state: AppState, server: MusicServer, track: Track, o
             }
             // Titles from "Aus dem Netz" have no album on the server – there the entry would lead nowhere.
             val album = track.albumId?.takeIf { track.path?.contains("/Aus dem Netz/") != true }
-            row("Teilen …", Symbol.Share) { scope.launch { shareTrack(context, state, server, track) } }
-            if (album != null) row("Zum Album", Symbol.Albums) {
+            row(tr("Teilen …"), Symbol.Share) { scope.launch { shareTrack(context, state, server, track) } }
+            if (album != null) row(tr("Zum Album"), Symbol.Albums) {
                 onClose(); state.tab = Tab.Library; state.stacks[Tab.Library] = listOf(Route.Library, Route.AlbumPage(album, web = track.path?.startsWith("https://") == true))
             }
             // iOS: AirPlay. Android: its output picker (phone speaker, Bluetooth, cast devices).
-            row("Ausgabegerät …", Symbol.SpeakerHigh) { showOutputSwitcher(context) }
+            row(tr("Ausgabegerät …"), Symbol.SpeakerHigh) { showOutputSwitcher(context) }
             if (Milk.loaded) row("Milkdrop-Visualisierung", Symbol.Sparkles, last = !Variant.PRIVATE) { onClose(); state.milk = true }
-            if (Variant.PRIVATE) row("Musikvideo", Symbol.Video, last = true, action = onVideo)
+            if (Variant.PRIVATE) row(tr("Musikvideo"), Symbol.Video, last = true, action = onVideo)
         }
     }
 }
@@ -277,14 +279,14 @@ private fun QueueView(playback: Playback, server: MusicServer, modifier: Modifie
         val y = if (dragging == i) dragY else 0f
         Box(Modifier.fillMaxWidth().height(60.dp).graphicsLayer { translationY = y }.zIndex(if (dragging == i) 1f else 0f)) {
             if (swipe < 0f) Box(Modifier.matchParentSize().background(Color(0xFFFF3B30)), contentAlignment = Alignment.CenterEnd) {
-                Label("Entfernen", 15f, 600, white, Modifier.padding(end = 16.dp))
+                Label(tr("Entfernen"), 15f, 600, white, Modifier.padding(end = 16.dp))
             }
             Row(Modifier.fillMaxSize().graphicsLayer { translationX = swipe }.background(if (swipe < 0f) Color(0xFF1C1C1E) else Color.Transparent)
                 .pointerInput(i, t.id) {
                     detectHorizontalDragGestures(onDragEnd = { if (swipe < -size.width * 0.35f) playback.remove(i); swipe = 0f },
                         onDragCancel = { swipe = 0f }) { _, dx -> swipe = (swipe + dx).coerceIn(-size.width.toFloat(), 0f) }
                 }
-                .clickable { playback.jump(i) }.semantics { contentDescription = "${t.title} von ${t.artist}" },
+                .clickable { playback.jump(i) }.semantics { contentDescription = tr("{title} von {artist}", "title" to t.title, "artist" to t.artist) },
                 verticalAlignment = Alignment.CenterVertically) {
                 Cover(server.cover(t, 120), Modifier.size(44.dp).graphicsLayer { alpha = if (dim) 0.5f else 1f }, 5.dp)
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
@@ -308,14 +310,14 @@ private fun QueueView(playback: Playback, server: MusicServer, modifier: Modifie
             item { Label("Verlauf", 17f, 700, white, Modifier.padding(top = 4.dp, bottom = 6.dp)) }
             items(history, key = { "h${it.index}-${it.value.id}" }) { (i, t) -> row(i, t, dim = true, movable = false) }
         }
-        item { Label("Als Nächstes", 17f, 700, white, Modifier.padding(top = 8.dp, bottom = 6.dp)) }
-        if (next.isEmpty()) item { Label(if (playback.autoplay) "Danach geht es mit Ähnlichem weiter." else "Nichts mehr in der Warteschlange.", 13f, color = soft, modifier = Modifier.padding(bottom = 8.dp)) }
+        item { Label(tr("Als Nächstes"), 17f, 700, white, Modifier.padding(top = 8.dp, bottom = 6.dp)) }
+        if (next.isEmpty()) item { Label(if (playback.autoplay) tr("Danach geht es mit Ähnlichem weiter.") else tr("Nichts mehr in der Warteschlange."), 13f, color = soft, modifier = Modifier.padding(bottom = 8.dp)) }
         items(next, key = { "n${it.index}-${it.value.id}" }) { (i, t) -> row(i, t, dim = false, movable = true) }
         if (auto.isNotEmpty()) {
             item {
                 Column(Modifier.padding(top = 12.dp, bottom = 6.dp)) {
-                    Label("Autoplay", 17f, 700, white)
-                    Label("Ähnliche Titel – läuft weiter, wenn die Warteschlange zu Ende ist", 13f, color = soft, lines = 2)
+                    Label(tr("Autoplay"), 17f, 700, white)
+                    Label(tr("Ähnliche Titel – läuft weiter, wenn die Warteschlange zu Ende ist"), 13f, color = soft, lines = 2)
                 }
             }
             items(auto, key = { "a${it.index}-${it.value.id}" }) { (i, t) -> row(i, t, dim = false, movable = true) }

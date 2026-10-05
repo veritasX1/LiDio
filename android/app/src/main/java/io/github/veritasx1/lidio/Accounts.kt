@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.Context
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
@@ -22,7 +24,7 @@ data class Account(val id: String, val kind: ServerKind, val address: String, va
         ServerKind.Navidrome -> SubsonicServer(address, user, secret)
         ServerKind.Jellyfin, ServerKind.Emby -> MediaBrowserServer(kind, address, userId, secret)
         ServerKind.Local -> LocalLibrary(context, id, LocalLibrary.decode(address))
-        ServerKind.Web -> Variant.webServer(context) ?: throw ServerError("Diese LiDio kennt keine Quelle im Netz.")
+        ServerKind.Web -> Variant.webServer(context) ?: throw ServerError(tr("Diese LiDio kennt keine Quelle im Netz."))
     }
 }
 

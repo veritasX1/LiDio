@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -76,7 +78,7 @@ sealed interface Route {
 }
 
 enum class Tab(val label: String, val symbol: Symbol, val root: Route?) {
-    Start("Start", Symbol.Home, null), Library("Mediathek", Symbol.Library, Route.Library), Search("Suchen", Symbol.Search, null)
+    Start(tr("Start"), Symbol.Home, null), Library(tr("Mediathek"), Symbol.Library, Route.Library), Search(tr("Suchen"), Symbol.Search, null)
 }
 
 /** The app's state: accounts, the server in use, the player and the way through each tab. */
@@ -159,12 +161,12 @@ class AppState(val accounts: Accounts, val playback: Playback, val serverFor: (A
             val track = withContext(Dispatchers.IO) { server.track(shared.id) }
             if (track != null) { playback.play(server, listOf(track)); nowPlaying = true; return }
         }
-        val own = account ?: run { notice = "Für „${shared.title}“ zuerst einen Server verbinden."; return }
+        val own = account ?: run { notice = tr("Für „{title}“ zuerst einen Server verbinden.", "title" to shared.title); return }
         val server = serverFor(own.copy(address = address))
         val result = withContext(Dispatchers.IO) { Matcher.run(server, listOf(Wanted(shared.title, shared.artist, shared.album))).first() }
         val track = result.track
         if (result.match != Match.Missing && track != null) { playback.play(server, listOf(track)); nowPlaying = true }
-        else notice = "„${shared.title}“ von ${shared.artist} ist nicht in deiner Mediathek."
+        else notice = tr("„{title}“ von {artist} ist nicht in deiner Mediathek.", "title" to shared.title, "artist" to shared.artist)
     }
 
     /** Checks which address answers; on a change the screens reload and the playing queue moves over. */
@@ -176,7 +178,7 @@ class AppState(val accounts: Accounts, val playback: Playback, val serverFor: (A
             val answers = withContext(Dispatchers.IO) { probe(a.kind, best) }
             if (!answers != fallback) {
                 fallback = !answers
-                notice = if (fallback) "Dein Server ist gerade nicht erreichbar – LiDio spielt solange aus dem Netz (${Variant.MUSIC})." else "Dein Server ist wieder da."
+                notice = if (fallback) tr("Dein Server ist gerade nicht erreichbar – LiDio spielt solange aus dem Netz ({MUSIC}).", "MUSIC" to Variant.MUSIC) else tr("Dein Server ist wieder da.")
                 generation++
             }
         }
@@ -218,7 +220,7 @@ fun <T> rememberCachedLoad(cache: String?, vararg keys: Any?, disk: DiskCache<T>
             Load(fresh, null, false)
         }
         catch (e: ServerError) { if (had != null) Load(had, null, false) else Load(null, e.message, false) }
-        catch (e: Exception) { if (had != null) Load(had, null, false) else Load(null, "Unerwartete Antwort vom Server.", false) }
+        catch (e: Exception) { if (had != null) Load(had, null, false) else Load(null, tr("Unerwartete Antwort vom Server."), false) }
     }
     return state to { attempt++; Unit }
 }
@@ -279,7 +281,7 @@ fun LiDioApp(state: AppState) {
         runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         val existing = state.accounts.all().firstOrNull { it.kind == ServerKind.Local }
         val list = (existing?.let { LocalLibrary.decode(it.address) } ?: emptyList()) + uri
-        val account = (existing ?: Account(java.util.UUID.randomUUID().toString(), ServerKind.Local, "", "", "", "Auf diesem Gerät"))
+        val account = (existing ?: Account(java.util.UUID.randomUUID().toString(), ServerKind.Local, "", "", "", tr("Auf diesem Gerät")))
             .copy(address = LocalLibrary.encode(list.distinct()))
         scope.launch { scanLocal(state, account) }
     }
@@ -311,7 +313,7 @@ fun LiDioApp(state: AppState) {
             Connect(onDone = { state.use(it); state.adding = false }, onCancel = if (account != null) ({ state.adding = false }) else null,
                 onLocal = { state.pickFolder() })
             state.scanning?.let { n -> Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp)).background(ink.elevated)
-                .padding(horizontal = 24.dp, vertical = 18.dp)) { Label("Ordner wird durchsucht … $n Titel", 15f, 600) } }
+                .padding(horizontal = 24.dp, vertical = 18.dp)) { Label(tr("Ordner wird durchsucht … {n} Titel", "n" to n), 15f, 600) } }
             return@Box
         }
         val server = remember(account, state.address, state.generation, state.fallback) {
@@ -358,7 +360,7 @@ fun LiDioApp(state: AppState) {
         }
         state.scanning?.let { n ->
             Box(Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp)).background(ink.elevated).padding(horizontal = 24.dp, vertical = 18.dp)) {
-                Label("Ordner wird durchsucht … $n Titel", 15f, 600)
+                Label(tr("Ordner wird durchsucht … {n} Titel", "n" to n), 15f, 600)
             }
         }
         // A shared link waits until a server is there.
@@ -445,18 +447,18 @@ private fun MiniPlayer(state: AppState, server: MusicServer) {
     val track = playback.current ?: return
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp).tourAnchor("miniplayer").shadow(10.dp, RoundedCornerShape(14.dp))
         .clip(RoundedCornerShape(14.dp)).background(if (ink.dark) Color(0xFF2C2C2E) else Color(0xFFF9F9F9))
-        .clickable(onClickLabel = "Wiedergabe öffnen") { state.nowPlaying = true }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        .clickable(onClickLabel = tr("Wiedergabe öffnen")) { state.nowPlaying = true }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Cover(server.cover(track, 120), Modifier.size(40.dp), 6.dp)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             Label(track.title, 15f, 500)
             Label(track.artist, 13f, color = ink.secondary)
         }
-        Box(Modifier.size(40.dp).clickable(role = Role.Button, onClickLabel = if (playback.playing) "Pause" else "Wiedergabe") { playback.toggle() }
-            .semantics { contentDescription = if (playback.playing) "Pause" else "Wiedergabe" }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(40.dp).clickable(role = Role.Button, onClickLabel = if (playback.playing) tr("Pause") else tr("Wiedergabe")) { playback.toggle() }
+            .semantics { contentDescription = if (playback.playing) tr("Pause") else tr("Wiedergabe") }, contentAlignment = Alignment.Center) {
             SymbolIcon(if (playback.playing) Symbol.Pause else Symbol.Play, ink.label, 22.dp)
         }
-        Box(Modifier.size(40.dp).clickable(role = Role.Button, onClickLabel = "Nächster Titel") { playback.next() }
-            .semantics { contentDescription = "Nächster Titel" }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(40.dp).clickable(role = Role.Button, onClickLabel = tr("Nächster Titel")) { playback.next() }
+            .semantics { contentDescription = tr("Nächster Titel") }, contentAlignment = Alignment.Center) {
             SymbolIcon(Symbol.Forward, ink.label, 24.dp)
         }
         Spacer(Modifier.width(2.dp))
@@ -471,7 +473,7 @@ suspend fun scanLocal(state: AppState, account: Account) {
     }
     state.scanning = null
     state.adding = false
-    state.use(account.copy(name = "Auf diesem Gerät · $count Titel"))
+    state.use(account.copy(name = tr("Auf diesem Gerät · {count} Titel", "count" to count)))
 }
 
 /** A long list from the server in pages (Emby: 12 000 albums, 35 000 titles): the next page comes when the end is near. */
@@ -488,7 +490,7 @@ class Pages<T>(private val pageSize: Int, private val fetch: (offset: Int, size:
             val page = withContext(Dispatchers.IO) { fetch(items.size, pageSize) }
             items = items + page
             if (page.size < pageSize) done = true
-        } catch (e: ServerError) { error = e.message } catch (e: Exception) { error = "Unerwartete Antwort vom Server." }
+        } catch (e: ServerError) { error = e.message } catch (e: Exception) { error = tr("Unerwartete Antwort vom Server.") }
         loading = false
     }
 }

@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -182,7 +184,7 @@ fun WinampLockScreen(state: AppState, onUnlock: (open: Boolean) -> Unit) {
         val hk = Scale(k.s * 1.4f)
         val text = "NACH OBEN WISCHEN ZUM ENTSPERREN"
         Canvas(Modifier.pixels((width - (text.length * 5 * hk.s).roundToInt()) / 2, height - hint + (4 * k.s).roundToInt(),
-            (text.length * 5 * hk.s).roundToInt(), (6 * hk.s).roundToInt()).semantics { contentDescription = "Nach oben wischen zum Entsperren" }) {
+            (text.length * 5 * hk.s).roundToInt(), (6 * hk.s).roundToInt()).semantics { contentDescription = tr("Nach oben wischen zum Entsperren") }) {
             skinText(skin, hk, text, 0, 0)
         }
     }

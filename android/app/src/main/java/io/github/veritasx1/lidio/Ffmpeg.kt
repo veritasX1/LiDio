@@ -2,6 +2,8 @@
 
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.Context
 import android.net.Uri
 import androidx.media3.common.C
@@ -120,9 +122,9 @@ class NativeDataSource(private val context: Context, private val decoder: PcmDec
         transferInitializing(dataSpec)
         uri = dataSpec.uri
         val file = decoder.unwrap(dataSpec.uri)
-        pfd = context.contentResolver.openFileDescriptor(file, "r") ?: throw IOException("Datei nicht lesbar")
+        pfd = context.contentResolver.openFileDescriptor(file, "r") ?: throw IOException(tr("Datei nicht lesbar"))
         handle = decoder.open(pfd!!.fd)
-        if (handle == 0L) throw IOException("Die Datei lässt sich nicht öffnen")
+        if (handle == 0L) throw IOException(tr("Die Datei lässt sich nicht öffnen"))
         val rate = decoder.sampleRate(handle); channels = decoder.channels(handle)
         val samples = decoder.durationUs(handle) * rate / 1_000_000
         header = Wav.header(rate, channels, samples)

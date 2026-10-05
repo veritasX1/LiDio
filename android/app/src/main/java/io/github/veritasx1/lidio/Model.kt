@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 /** What a music server offers – the same few things for Navidrome, Jellyfin and Emby, so the screens never ask which one. */
 data class Artist(val id: String, val name: String, val albumCount: Int = 0, val coverId: String? = null)
 
@@ -60,9 +62,9 @@ data class Genre(val id: String, val name: String, val color: Long? = null)
 data class SearchResult(val artists: List<Artist> = emptyList(), val albums: List<Album> = emptyList(), val tracks: List<Track> = emptyList())
 
 /** How albums are listed (Apple Music: "Zuletzt hinzugefügt", alphabetical; plus "Zuletzt gespielt"). */
-enum class AlbumOrder(val label: String) { Newest("Zuletzt hinzugefügt"), Recent("Zuletzt gespielt"), Alphabetical("Titel"), Frequent("Oft gespielt"),
+enum class AlbumOrder(val label: String) { Newest(tr("Zuletzt hinzugefügt")), Recent(tr("Zuletzt gespielt")), Alphabetical(tr("Titel")), Frequent(tr("Oft gespielt")),
     /** iOS's "Sortieren nach": also by artist and by year (card 81b01b4a). */
-    Artist("Interpret"), Year("Erscheinungsjahr") }
+    Artist(tr("Interpret")), Year("Erscheinungsjahr") }
 
 /** A music server: every call is made off the main thread and throws ServerError when it fails. */
 interface MusicServer {
@@ -132,7 +134,7 @@ interface MusicServer {
     fun played(track: Track) {}
 }
 
-enum class ServerKind(val label: String) { Navidrome("Navidrome"), Jellyfin("Jellyfin"), Emby("Emby"), Local("Auf diesem Gerät"),
+enum class ServerKind(val label: String) { Navidrome("Navidrome"), Jellyfin("Jellyfin"), Emby("Emby"), Local(tr("Auf diesem Gerät")),
     /** The web source as a source of its own (cards 6c9ba022, d1f83bf9) – only where the variant has one. */
     Web(Variant.MUSIC) }
 
@@ -148,11 +150,11 @@ fun duration(seconds: Int): String {
 fun summary(tracks: Int, seconds: Int): String {
     val minutes = (seconds + 30) / 60
     val time = when {
-        minutes >= 60 -> "${minutes / 60} Std. ${minutes % 60} Min."
-        minutes == 1 -> "1 Minute"
-        else -> "$minutes Minuten"
+        minutes >= 60 -> tr("{value} Std. {value2} Min.", "value" to (minutes / 60), "value2" to (minutes % 60))
+        minutes == 1 -> tr("1 Minute")
+        else -> tr("{minutes} Minuten", "minutes" to minutes)
     }
-    return "$tracks Titel, $time"
+    return tr("{tracks} Titel, {time}", "tracks" to tracks, "time" to time)
 }
 
 /** File types LiDio opens on the phone itself (Media3's extractors; decoding by the phone or FFmpeg). Everything else –

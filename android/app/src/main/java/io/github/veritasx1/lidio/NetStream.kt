@@ -2,6 +2,8 @@
 
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.Context
 import android.net.Uri
 import androidx.media3.datasource.DataSource
@@ -26,7 +28,7 @@ object NetStream {
     @Synchronized fun forget(page: String) { known.remove(page) }
 
     fun resolve(context: Context, page: String): StreamPart =
-        cached(page) ?: (Variant.engine(context) ?: throw java.io.IOException("Keine Quelle im Netz")).audio(page).also { keep(page, it) }
+        cached(page) ?: (Variant.engine(context) ?: throw java.io.IOException(tr("Keine Quelle im Netz"))).audio(page).also { keep(page, it) }
 }
 
 /** Opens a "lidionetz:" title: finds its address, then reads it like any web address (with the headers the site wants). */

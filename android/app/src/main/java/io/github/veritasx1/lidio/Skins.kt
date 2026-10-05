@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -59,7 +61,7 @@ import java.io.File
 
 /** A skin in the museum: its md5 is its name there. */
 data class MuseumSkin(val md5: String, val file: String, val download: String, val screenshot: String) {
-    val name get() = if (md5 == Museum.CLASSIC) "Winamp Classic" else skinName(file)
+    val name get() = if (md5 == Museum.CLASSIC) tr("Winamp Classic") else skinName(file)
 }
 
 fun skinName(file: String) = file.substringBeforeLast('.').replace('_', ' ').trim()
@@ -74,7 +76,7 @@ object Museum {
 
     private fun query(q: String, variables: JSONObject = JSONObject()): JSONObject =
         JSONObject(Http.post(api, JSONObject().put("query", q).put("variables", variables).toString())).let { answer ->
-            answer.optJSONArray("errors")?.let { throw ServerError("Skin-Museum: " + (it.optJSONObject(0)?.optString("message") ?: "Fehler")) }
+            answer.optJSONArray("errors")?.let { throw ServerError("Skin-Museum: " + (it.optJSONObject(0)?.optString("message") ?: tr("Fehler"))) }
             answer.getJSONObject("data")
         }
 
@@ -104,7 +106,7 @@ data class LocalSkin(val md5: String, val name: String, val path: String, val pr
 
 object SkinLibrary {
     /** The built-in skin has no file; its preview lives in the app. */
-    val BUILT_IN = LocalSkin("", "LiDio Graphit", "", "asset:skins/lidio.png")
+    val BUILT_IN = LocalSkin("", tr("LiDio Graphit"), "", "asset:skins/lidio.png")
 
     fun folder(context: Context) = File(context.filesDir, "skins").apply { mkdirs() }
 
@@ -128,7 +130,7 @@ object SkinLibrary {
         installed(context, skin.md5)?.let { return@withContext it }
         val bytes = download(skin.download, 20L shl 20)
         val parsed = runCatching { Skin.read(skin.name, bytes.inputStream(), null) }.getOrNull()
-        if (parsed?.sheet("main") == null) throw ServerError("„${skin.name}“ ist kein Skin für Winamp 2.")
+        if (parsed?.sheet("main") == null) throw ServerError(tr("„{name}“ ist kein Skin für Winamp 2.", "name" to skin.name))
         val dir = folder(context)
         File(dir, "${skin.md5}.wsz").writeBytes(bytes)
         runCatching { File(dir, "${skin.md5}.png").writeBytes(download(skin.screenshot, 4L shl 20)) }
@@ -145,19 +147,19 @@ object SkinLibrary {
         val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
         connection.connectTimeout = 10_000; connection.readTimeout = 30_000
         try {
-            if (connection.responseCode != 200) throw ServerError("Das Skin-Museum antwortet nicht (${connection.responseCode}).")
+            if (connection.responseCode != 200) throw ServerError(tr("Das Skin-Museum antwortet nicht ({responseCode}).", "responseCode" to connection.responseCode))
             val out = java.io.ByteArrayOutputStream()
             connection.inputStream.use { input ->
                 val buffer = ByteArray(16 * 1024)
                 while (true) {
                     val n = input.read(buffer); if (n < 0) break
                     out.write(buffer, 0, n)
-                    if (out.size() > limit) throw ServerError("Die Datei ist zu groß für einen Skin.")
+                    if (out.size() > limit) throw ServerError(tr("Die Datei ist zu groß für einen Skin."))
                 }
             }
             return out.toByteArray()
         } catch (e: java.io.IOException) {
-            throw ServerError("Keine Verbindung zum Skin-Museum.")
+            throw ServerError(tr("Keine Verbindung zum Skin-Museum."))
         } finally { connection.disconnect() }
     }
 }
@@ -194,7 +196,7 @@ fun SkinsScreen(state: AppState) {
                     museum.addAll(found.filter { f -> f.md5 != Museum.CLASSIC && museum.none { it.md5 == f.md5 } })
                     pages++; if (asked.isNotEmpty() || found.isEmpty()) end = true
                 }
-                .onFailure { error = it.message ?: "Keine Verbindung zum Skin-Museum." }
+                .onFailure { error = it.message ?: tr("Keine Verbindung zum Skin-Museum.") }
             loading = false
         }
     }
@@ -206,9 +208,9 @@ fun SkinsScreen(state: AppState) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        NavBar(state, "Skins")
+        NavBar(state, tr("Skins"))
         LazyColumn(Modifier.fillMaxSize().background(ink.grouped), contentPadding = chromePadding()) {
-            sectionLabel("AUF DIESEM GERÄT")
+            sectionLabel(tr("AUF DIESEM GERÄT"))
             grid(local) { skin ->
                 SkinTile(skin.name, skin.preview, selected = w.skin == skin.path,
                     note = if (skin.md5.isEmpty()) "Eingebaut" else null,
@@ -223,10 +225,10 @@ fun SkinsScreen(state: AppState) {
                         verticalAlignment = Alignment.CenterVertically) {
                         Cover(c?.screenshot, Modifier.width(96.dp).aspectRatio(275f / 348f), 4.dp)
                         Column(Modifier.weight(1f).padding(start = 14.dp)) {
-                            Label("Winamp Classic", 17f, 600)
-                            Label("Der Original-Skin von Winamp 2.91 (Nullsoft). Wird aus dem Skin-Museum geladen.", 13f,
+                            Label(tr("Winamp Classic"), 17f, 600)
+                            Label(tr("Der Original-Skin von Winamp 2.91 (Nullsoft). Wird aus dem Skin-Museum geladen."), 13f,
                                 color = ink.secondary, lines = 4)
-                            Label(if (busy == Museum.CLASSIC) "Wird geladen …" else "Laden", 15f, 600, ink.tint, Modifier.padding(top = 8.dp))
+                            Label(if (busy == Museum.CLASSIC) tr("Wird geladen …") else tr("Laden"), 15f, 600, ink.tint, Modifier.padding(top = 8.dp))
                         }
                     }
                 }
@@ -238,17 +240,17 @@ fun SkinsScreen(state: AppState) {
                     verticalAlignment = Alignment.CenterVertically) {
                     SymbolIcon(Symbol.Search, ink.secondary, 18.dp)
                     Box(Modifier.weight(1f).padding(start = 6.dp)) {
-                        if (query.isEmpty()) Label("Über 90 000 Skins durchsuchen", 17f, color = ink.secondary)
+                        if (query.isEmpty()) Label(tr("Über 90 000 Skins durchsuchen"), 17f, color = ink.secondary)
                         BasicTextField(query, { query = it }, singleLine = true, textStyle = style(17f, color = ink.label), cursorBrush = SolidColor(ink.tint),
-                            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Skin suchen" })
+                            modifier = Modifier.fillMaxWidth().semantics { contentDescription = tr("Skin suchen") })
                     }
-                    if (query.isNotEmpty()) Box(Modifier.combinedClickable(role = Role.Button, onClickLabel = "Löschen") { query = "" }) {
+                    if (query.isNotEmpty()) Box(Modifier.combinedClickable(role = Role.Button, onClickLabel = tr("Löschen")) { query = "" }) {
                         SymbolIcon(Symbol.Close, ink.secondary, 16.dp)
                     }
                 }
             }
             grid(museum.toList()) { skin ->
-                SkinTile(skin.name, skin.screenshot, selected = false, note = if (busy == skin.md5) "Wird geladen …" else null) { chosen = skin }
+                SkinTile(skin.name, skin.screenshot, selected = false, note = if (busy == skin.md5) tr("Wird geladen …") else null) { chosen = skin }
             }
             item {
                 LaunchedEffect(museum.size, asked) { more() }   // the end of the list is in sight: the next page
@@ -256,18 +258,18 @@ fun SkinsScreen(state: AppState) {
                     when {
                         error != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Label(error ?: "", 15f, color = ink.secondary, lines = 3, align = TextAlign.Center)
-                            Label("Erneut versuchen", 17f, color = ink.tint, modifier = Modifier.padding(top = 8.dp)
+                            Label(tr("Erneut versuchen"), 17f, color = ink.tint, modifier = Modifier.padding(top = 8.dp)
                                 .combinedClickable(role = Role.Button) { error = null; more() })
                         }
-                        loading -> Label("Wird geladen …", 15f, color = ink.secondary)
-                        end && museum.isEmpty() -> Label("Keine Skins gefunden.", 15f, color = ink.secondary)
+                        loading -> Label(tr("Wird geladen …"), 15f, color = ink.secondary)
+                        end && museum.isEmpty() -> Label(tr("Keine Skins gefunden."), 15f, color = ink.secondary)
                         else -> Spacer(Modifier.height(1.dp))
                     }
                 }
             }
             item {
-                Label("Die Skins stammen aus dem Winamp Skin Museum (skins.webamp.org) und gehören ihren Gestalterinnen und Gestaltern. " +
-                    "LiDio fragt das Museum nur, solange diese Seite offen ist. Halte einen geladenen Skin gedrückt, um ihn zu löschen.",
+                Label(tr("Die Skins stammen aus dem Winamp Skin Museum (skins.webamp.org) und gehören ihren Gestalterinnen und Gestaltern. ") +
+                    tr("LiDio fragt das Museum nur, solange diese Seite offen ist. Halte einen geladenen Skin gedrückt, um ihn zu löschen."),
                     13f, color = ink.secondary, lines = 6, modifier = Modifier.padding(start = 32.dp, end = 32.dp, bottom = 32.dp))
             }
         }
@@ -278,14 +280,14 @@ fun SkinsScreen(state: AppState) {
             chosen = null; busy = skin.md5
             scope.launch {
                 runCatching { SkinLibrary.install(context, skin) }
-                    .onSuccess { use(it); local = SkinLibrary.all(context); state.notice = "„${it.name}“ ist jetzt dein Skin." }
-                    .onFailure { state.notice = it.message ?: "Der Skin ließ sich nicht laden." }
+                    .onSuccess { use(it); local = SkinLibrary.all(context); state.notice = tr("„{name}“ ist jetzt dein Skin.", "name" to it.name) }
+                    .onFailure { state.notice = it.message ?: tr("Der Skin ließ sich nicht laden.") }
                 busy = null
             }
         }
     }
     removing?.let { skin ->
-        Ask("„${skin.name}“ löschen?", "Der Skin wird von diesem Gerät entfernt. Du kannst ihn jederzeit wieder laden.", "Löschen",
+        Ask(tr("„{name}“ löschen?", "name" to skin.name), tr("Der Skin wird von diesem Gerät entfernt. Du kannst ihn jederzeit wieder laden."), tr("Löschen"),
             onYes = { if (w.skin == skin.path) use(SkinLibrary.BUILT_IN); SkinLibrary.remove(context, skin); local = SkinLibrary.all(context); removing = null },
             onNo = { removing = null })
     }
@@ -309,7 +311,7 @@ private fun <T> LazyListScope.grid(list: List<T>, tile: @Composable (T) -> Unit)
 @Composable
 private fun SkinTile(name: String, picture: String?, selected: Boolean, note: String? = null, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val ink = Ink
-    Column(Modifier.combinedClickable(role = Role.Button, onLongClick = onLongClick, onLongClickLabel = if (onLongClick != null) "Löschen" else null, onClick = onClick)
+    Column(Modifier.combinedClickable(role = Role.Button, onLongClick = onLongClick, onLongClickLabel = if (onLongClick != null) tr("Löschen") else null, onClick = onClick)
         .semantics { contentDescription = name; this.selected = selected }) {
         Box {
             Cover(picture, Modifier.fillMaxWidth().aspectRatio(275f / 348f)
@@ -331,8 +333,8 @@ private fun SkinSheet(skin: MuseumSkin, onClose: () -> Unit, onUse: () -> Unit) 
             Cover(skin.screenshot, Modifier.padding(top = 20.dp).width(220.dp).aspectRatio(275f / 348f), 4.dp)
             Label(skin.name, 17f, 600, modifier = Modifier.padding(16.dp), lines = 2, align = TextAlign.Center)
             Box(Modifier.fillMaxWidth().height(0.5.dp).background(ink.separator))
-            ListRow("Laden und verwenden", titleColor = ink.tint, onClick = onUse)
-            ListRow("Abbrechen", separator = false, onClick = onClose)
+            ListRow(tr("Laden und verwenden"), titleColor = ink.tint, onClick = onUse)
+            ListRow(tr("Abbrechen"), separator = false, onClick = onClose)
         }
     }
 }

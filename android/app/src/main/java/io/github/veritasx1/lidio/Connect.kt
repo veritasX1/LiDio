@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -60,7 +62,7 @@ fun Connect(onDone: (Account) -> Unit, onCancel: (() -> Unit)?, check: ((Account
     var error by remember { mutableStateOf<String?>(null) }
 
     fun connect() {
-        if (address.isBlank() || user.isBlank()) { error = "Bitte Adresse und Benutzername eintragen."; return }
+        if (address.isBlank() || user.isBlank()) { error = tr("Bitte Adresse und Benutzername eintragen."); return }
         busy = true; error = null
         scope.launch {
             val result = withContext(Dispatchers.IO) {
@@ -78,19 +80,19 @@ fun Connect(onDone: (Account) -> Unit, onCancel: (() -> Unit)?, check: ((Account
                 }
             }
             busy = false
-            result.onSuccess(onDone).onFailure { error = (it as? ServerError)?.message ?: "Keine Verbindung – Adresse prüfen." }
+            result.onSuccess(onDone).onFailure { error = (it as? ServerError)?.message ?: tr("Keine Verbindung – Adresse prüfen.") }
         }
     }
 
     Column(Modifier.fillMaxSize().background(ink.grouped).verticalScroll(rememberScrollState()).imePadding()
         .windowInsetsPadding(WindowInsets.statusBars)) {
         Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (onCancel != null) Label("Abbrechen", 17f, 400, ink.tint, Modifier.clickable(role = Role.Button, onClick = onCancel))
+            if (onCancel != null) Label(tr("Abbrechen"), 17f, 400, ink.tint, Modifier.clickable(role = Role.Button, onClick = onCancel))
         }
         Column(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             AppIcon(Modifier.size(88.dp))
-            Label(if (onCancel == null) "Willkommen bei LiDio" else "Server hinzufügen", 28f, 700, modifier = Modifier.padding(top = 16.dp))
-            Label("Deine Musik von deinem eigenen Server – ohne Abo.", 15f, color = ink.secondary, modifier = Modifier.padding(top = 6.dp, start = 32.dp, end = 32.dp),
+            Label(if (onCancel == null) tr("Willkommen bei LiDio") else tr("Server hinzufügen"), 28f, 700, modifier = Modifier.padding(top = 16.dp))
+            Label(tr("Deine Musik von deinem eigenen Server – ohne Abo."), 15f, color = ink.secondary, modifier = Modifier.padding(top = 6.dp, start = 32.dp, end = 32.dp),
                 lines = 2, align = TextAlign.Center)
         }
         Group("SERVER") {
@@ -98,26 +100,26 @@ fun Connect(onDone: (Account) -> Unit, onCancel: (() -> Unit)?, check: ((Account
             Segmented(kinds.map { it.label }, kinds.indexOf(kind), Modifier.padding(12.dp)) { kind = kinds[it] }
         }
         Group(null) {
-            Field("Adresse", address, { address = it }, placeholder = "im WLAN, z. B. 192.168.1.20:8096", keyboard = KeyboardType.Uri)
+            Field(tr("Adresse"), address, { address = it }, placeholder = tr("im WLAN, z. B. 192.168.1.20:8096"), keyboard = KeyboardType.Uri)
             Line()
-            Field("Unterwegs", external, { external = it }, placeholder = "optional, z. B. musik.example.de", keyboard = KeyboardType.Uri)
+            Field("Unterwegs", external, { external = it }, placeholder = tr("optional, z. B. musik.example.de"), keyboard = KeyboardType.Uri)
             Line()
-            Field("Benutzer", user, { user = it }, placeholder = "Name")
+            Field(tr("Benutzer"), user, { user = it }, placeholder = tr("Name"))
             Line()
-            Field("Passwort", password, { password = it }, placeholder = "Passwort", secret = true)
+            Field(tr("Passwort"), password, { password = it }, placeholder = tr("Passwort"), secret = true)
         }
-        Label("Im WLAN nimmt LiDio die schnelle Adresse, unterwegs die zweite – ganz von selbst.", 13f, color = ink.secondary,
+        Label(tr("Im WLAN nimmt LiDio die schnelle Adresse, unterwegs die zweite – ganz von selbst."), 13f, color = ink.secondary,
             modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp), lines = 2)
         error?.let { Label(it, 15f, 500, Color(0xFFFF3B30), Modifier.padding(start = 32.dp, end = 32.dp, top = 10.dp), lines = 3) }
         Box(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (busy) ink.fill else ink.tint)
             .clickable(enabled = !busy, role = Role.Button, onClick = ::connect).padding(vertical = 15.dp), contentAlignment = Alignment.Center) {
-            Label(if (busy) "Verbinde …" else "Verbinden", 17f, 600, Color.White)
+            Label(if (busy) tr("Verbinde …") else tr("Verbinden"), 17f, 600, Color.White)
         }
         onLocal?.let { local ->
-            Label("Oder Musik auf diesem Gerät verwenden …", 17f, 400, ink.tint, Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = local)
+            Label(tr("Oder Musik auf diesem Gerät verwenden …"), 17f, 400, ink.tint, Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = local)
                 .padding(bottom = 16.dp), align = TextAlign.Center)
         }
-        Label("LiDio spricht nur mit diesem Server. ${if (kind == ServerKind.Navidrome) "Das Passwort wird" else "Der Zugangsschlüssel wird"} verschlüsselt auf diesem Gerät gespeichert. Keine Werbung, keine Statistik, kein Konto bei uns.",
+        Label(tr("LiDio spricht nur mit diesem Server. {if} verschlüsselt auf diesem Gerät gespeichert. Keine Werbung, keine Statistik, kein Konto bei uns.", "if" to (if (kind == ServerKind.Navidrome) "Das Passwort wird" else "Der Zugangsschlüssel wird")),
             13f, color = ink.secondary, modifier = Modifier.padding(horizontal = 32.dp).widthIn(max = 520.dp), lines = 5)
     }
 }

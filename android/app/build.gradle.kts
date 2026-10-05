@@ -73,6 +73,8 @@ android {
         unitTests.isIncludeAndroidResources = true
         unitTests.all {
             it.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+            // Tests check the German texts (the source language) – regardless of the computer's locale.
+            it.systemProperty("lidio.language", (project.findProperty("lang") as String?) ?: "de")
             // Pictures: ./gradlew testDebugUnitTest -Pshots=/folder
             (project.findProperty("shots") as String?)?.let { folder -> it.systemProperty("lidio.shots", folder) }
         }
@@ -84,6 +86,14 @@ android {
         jniLibs.useLegacyPackaging = true
     }
 }
+
+// The translations: one catalogue for both apps, kept with the Ubuntu app.
+val copyLocale by tasks.registering(Sync::class) {
+    from(rootProject.file("../linux/lidio/locale")) { include("*.json") }
+    into(layout.buildDirectory.dir("generated/locale/locale"))
+}
+android.sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("generated/locale"))
+tasks.named("preBuild") { dependsOn(copyLocale) }
 
 dependencies {
     // AndroidX and Media3 only – no analytics, ads or tracking. The network goes to the user's own server.

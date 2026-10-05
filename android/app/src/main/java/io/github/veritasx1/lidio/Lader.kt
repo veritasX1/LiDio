@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.Context
 import androidx.compose.runtime.mutableStateMapOf
 import org.json.JSONObject
@@ -27,7 +29,7 @@ object Lader {
         c.setRequestProperty("X-Emby-Token", account.secret); c.setRequestProperty("X-LiDio-User", account.userId)
         if (body != null) { c.requestMethod = "POST"; c.doOutput = true; c.setRequestProperty("Content-Type", "application/json"); c.outputStream.use { it.write(body.toByteArray()) } }
         try {
-            if (c.responseCode !in 200..299) throw ServerError(runCatching { JSONObject(c.errorStream.bufferedReader().readText()).optString("error") }.getOrNull() ?: "Lader: Fehler ${c.responseCode}")
+            if (c.responseCode !in 200..299) throw ServerError(runCatching { JSONObject(c.errorStream.bufferedReader().readText()).optString("error") }.getOrNull() ?: tr("Lader: Fehler {responseCode}", "responseCode" to c.responseCode))
             return c.inputStream.bufferedReader().readText()
         } finally { c.disconnect() }
     }
@@ -44,7 +46,7 @@ object Lader {
 
     /** Hands a title to the Lader (blocking); afterwards its state is followed with poll(). */
     fun load(account: Account, address: String, hit: WebHit, playlistId: String? = null, line: String? = null, position: Int? = null) {
-        val b = base(account, address) ?: throw ServerError("Nur mit Emby oder Jellyfin.")
+        val b = base(account, address) ?: throw ServerError(tr("Nur mit Emby oder Jellyfin."))
         val w = line?.let { MissingNote.wanted(it) }
         val body = JSONObject().put("url", hit.url).put("artist", w?.artist?.ifEmpty { null } ?: hit.artist).put("title", w?.title ?: hit.title)
             .put("album", hit.album ?: "").put("playlistId", playlistId).put("line", line).put("position", position)

@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -142,7 +144,7 @@ class LocalLibrary(private val context: Context, private val accountId: String, 
         val parts = e.folder.removePrefix(e.root).split('/').filter { it.isNotEmpty() }
         val folderAlbum = parts.lastOrNull() ?: ""
         val folderArtist = if (folderAlbum.contains(" - ")) folderAlbum.substringBefore(" - ") else parts.getOrNull(parts.size - 2) ?: ""
-        val artist = tag?.artist ?: split.artist.ifEmpty { folderArtist.ifEmpty { "Unbekannt" } }
+        val artist = tag?.artist ?: split.artist.ifEmpty { folderArtist.ifEmpty { tr("Unbekannt") } }
         val albumArtist = tag?.albumArtist ?: tag?.artist ?: folderArtist.ifEmpty { artist }
         val album = tag?.album ?: folderAlbum.substringAfter(" - ")
         val albumId = SubsonicServer.md5("$albumArtist|$album").take(16)
@@ -187,12 +189,12 @@ class LocalLibrary(private val context: Context, private val accountId: String, 
 
     private val plays get() = context.getSharedPreferences("lokal-$accountId", Context.MODE_PRIVATE)
 
-    override fun check() = "Auf diesem Gerät · ${count()} Titel"
+    override fun check() = tr("Auf diesem Gerät · {count} Titel", "count" to (count()))
 
     private fun albumsOf(tracks: List<Track>): List<Album> = tracks.groupBy { it.albumId }.map { (id, list) ->
         val first = list.first()
         val artists = list.map { albumArtist(it) }.distinct()
-        Album(id ?: "", first.album.ifEmpty { "Einzelne Titel" }, if (artists.size == 1) artists[0] else "Verschiedene Interpreten",
+        Album(id ?: "", first.album.ifEmpty { tr("Einzelne Titel") }, if (artists.size == 1) artists[0] else tr("Verschiedene Interpreten"),
             SubsonicServer.md5(artists.first()).take(16), list.mapNotNull { it.year }.maxOrNull(), first.coverId, list.size, list.sumOf { it.duration },
             compilation = artists.size > 1)
     }
@@ -202,7 +204,7 @@ class LocalLibrary(private val context: Context, private val accountId: String, 
     }.sortedBy { it.name.lowercase() }
 
     override fun artist(id: String): Pair<Artist, List<Album>> {
-        val artist = artists().firstOrNull { it.id == id } ?: throw ServerError("Nicht gefunden.")
+        val artist = artists().firstOrNull { it.id == id } ?: throw ServerError(tr("Nicht gefunden."))
         return artist to albumsOf(load().filter { albumArtist(it) == artist.name }).sortedByDescending { it.year ?: 0 }
     }
 
@@ -224,7 +226,7 @@ class LocalLibrary(private val context: Context, private val accountId: String, 
 
     override fun album(id: String): Pair<Album, List<Track>> {
         val tracks = load().filter { it.albumId == id }.sortedWith(compareBy({ it.disc ?: 1 }, { it.number ?: 0 }, { it.title }))
-        val album = albumsOf(tracks).firstOrNull() ?: throw ServerError("Nicht gefunden.")
+        val album = albumsOf(tracks).firstOrNull() ?: throw ServerError(tr("Nicht gefunden."))
         return album to tracks
     }
 
@@ -235,7 +237,7 @@ class LocalLibrary(private val context: Context, private val accountId: String, 
     override fun playlists(): List<Playlist> = ownPlaylists().map { (id, p) -> Playlist(id, p.first, p.second.size, 0, null) }
 
     override fun playlist(id: String): Pair<Playlist, List<Track>> {
-        val (name, ids) = ownPlaylists()[id] ?: throw ServerError("Nicht gefunden.")
+        val (name, ids) = ownPlaylists()[id] ?: throw ServerError(tr("Nicht gefunden."))
         val byId = load().associateBy { it.id }
         val tracks = ids.mapNotNull { byId[it] }
         return Playlist(id, name, tracks.size, tracks.sumOf { it.duration }, tracks.firstOrNull()?.coverId) to tracks

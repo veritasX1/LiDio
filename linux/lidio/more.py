@@ -8,6 +8,7 @@ from gi.repository import Adw, Gio, GLib, Gtk, Gdk
 
 from .covers import Cover
 from .widgets import shelf
+from .i18n import _
 
 
 def _label(text, css=None):
@@ -36,7 +37,7 @@ class MoreMixin:
         if not self.player.current:
             self.player.play(self.server, tracks); return
         (self.player.play_next if next_ else self.player.add)(list(tracks))
-        self.toast(("Spielt als Nächstes: " if next_ else "Spielt zuletzt: ") + (tracks[0].title if len(tracks) == 1 else f"{len(tracks)} Titel"))
+        self.toast((_("Spielt als Nächstes: ") if next_ else _("Spielt zuletzt: ")) + (tracks[0].title if len(tracks) == 1 else _("{count} Titel", count=len(tracks))))
 
     def track_menu(self, widget, x, y, tracks, playlist=None):
         """Right click on a title (or several): Music's context menu."""
@@ -45,36 +46,36 @@ class MoreMixin:
         off = self.app.offline
         m = Gio.Menu()
         s1 = Gio.Menu()
-        s1.append("Als Nächstes spielen", "win.t-next"); s1.append("Zuletzt spielen", "win.t-last")
+        s1.append(_("Als Nächstes spielen"), "win.t-next"); s1.append(_("Zuletzt spielen"), "win.t-last")
         m.append_section(None, s1)
         s2 = Gio.Menu()
-        s2.append("Aus Lieblingstiteln entfernen" if t.favorite else "Zu Lieblingstiteln", "win.t-fav")
+        s2.append(_("Aus Lieblingstiteln entfernen") if t.favorite else _("Zu Lieblingstiteln"), "win.t-fav")
         add = Gio.Menu()
-        new = Gio.Menu(); new.append("Neue Playlist …", "win.t-add::"); add.append_section(None, new)
+        new = Gio.Menu(); new.append(_("Neue Playlist …"), "win.t-add::"); add.append_section(None, new)
         mine = Gio.Menu()
         for p in getattr(self, "_playlists", [])[:60]:
             if not playlist or p.id != playlist.id:
                 mine.append(p.name, f"win.t-add::{p.id}")
         add.append_section(None, mine)
-        s2.append_submenu("Zur Playlist hinzufügen", add)
+        s2.append_submenu(_("Zur Playlist hinzufügen"), add)
         if playlist:
-            s2.append("Aus Playlist entfernen", "win.t-remove")
+            s2.append(_("Aus Playlist entfernen"), "win.t-remove")
         m.append_section(None, s2)
         s3 = Gio.Menu()
         if getattr(self.server, "kind", "") == "local":
             pass
         elif all(off.has(x) for x in tracks):
-            s3.append("Von diesem Computer entfernen", "win.t-unload")
+            s3.append(_("Von diesem Computer entfernen"), "win.t-unload")
         else:
-            s3.append("Auf diesem Computer laden", "win.t-load")
+            s3.append(_("Auf diesem Computer laden"), "win.t-load")
         m.append_section(None, s3)
         if len(tracks) == 1:
             s4 = Gio.Menu()
             if t.album_id:
-                s4.append("Zum Album", "win.t-album")
-            s4.append("Zum Interpreten", "win.t-artist")
+                s4.append(_("Zum Album"), "win.t-album")
+            s4.append(_("Zum Interpreten"), "win.t-artist")
             if getattr(self.server, "kind", "") != "local":
-                s4.append("Teilen – Link kopieren", "win.t-share")
+                s4.append(_("Teilen – Link kopieren"), "win.t-share")
             m.append_section(None, s4)
         pop = Gtk.PopoverMenu.new_from_model(m)
         pop.set_has_arrow(False); pop.set_parent(widget)
@@ -89,7 +90,7 @@ class MoreMixin:
         from .window import run
         t, acc, server = self._ctx["tracks"][0], self.account, self.server
         run(lambda: self.app.share_id(acc, server), lambda sid: (self.get_clipboard().set(Shared(sid, t.id, t.title, t.artist, t.album).text()),
-                                                                 self.toast("Link kopiert – zum Beispiel in Signal einfügen")), self.toast)
+                                                                 self.toast(_("Link kopiert – zum Beispiel in Signal einfügen"))), self.toast)
 
     def _toggle_favorite(self, tracks=None):
         tracks = tracks or self._ctx["tracks"]
@@ -107,7 +108,7 @@ class MoreMixin:
             if cur and any(t.id == cur.id for t in tracks):
                 cur.favorite = on
             self._refresh_rows(); self._sync_lcd_star()
-            self.toast("Zu Lieblingstiteln hinzugefügt" if on else "Aus Lieblingstiteln entfernt")
+            self.toast(_("Zu Lieblingstiteln hinzugefügt") if on else _("Aus Lieblingstiteln entfernt"))
         from .window import run
         run(work, done, self.toast)
 
@@ -120,7 +121,7 @@ class MoreMixin:
         self.lcd_star.set_visible(bool(t))
         on = bool(t and t.favorite)
         self.lcd_star.set_icon_name("starred-symbolic" if on else "non-starred-symbolic")
-        self.lcd_star.set_tooltip_text("Aus Lieblingstiteln entfernen" if on else "Zu Lieblingstiteln")
+        self.lcd_star.set_tooltip_text(_("Aus Lieblingstiteln entfernen") if on else _("Zu Lieblingstiteln"))
         (self.lcd_star.add_css_class if on else self.lcd_star.remove_css_class)("favorite")
 
     def _go_album(self):
@@ -138,15 +139,15 @@ class MoreMixin:
             if a:
                 self.push(self.artist_page(a.id))
             else:
-                self.toast(f"„{name}“ nicht als Interpret gefunden.")
+                self.toast(_("„{name}“ nicht als Interpret gefunden.", name=name))
         run(lambda: self.server.search(name), found, self.toast)
 
     # ---------- playlists ----------
     def _ask_name(self, heading, initial, button, then):
         d = Adw.AlertDialog(heading=heading)
-        entry = Gtk.Entry(text=initial, activates_default=True, placeholder_text="Name der Playlist")
+        entry = Gtk.Entry(text=initial, activates_default=True, placeholder_text=_("Name der Playlist"))
         d.set_extra_child(entry)
-        d.add_response("cancel", "Abbrechen"); d.add_response("ok", button)
+        d.add_response("cancel", _("Abbrechen")); d.add_response("ok", button)
         d.set_default_response("ok"); d.set_close_response("cancel")
         d.set_response_appearance("ok", Adw.ResponseAppearance.SUGGESTED)
         entry.connect("changed", lambda e: d.set_response_enabled("ok", bool(e.get_text().strip())))
@@ -161,10 +162,10 @@ class MoreMixin:
 
         def make(name):
             def done(p):
-                self.toast(f"Playlist „{name}“ angelegt" + (f" mit {len(tracks)} Titeln" if tracks else ""))
+                self.toast(_("Playlist „{name}“ angelegt", name=name) + (_(" mit {count} Titeln", count=len(tracks)) if tracks else ""))
                 self.reload_playlists(select=p.id)
             run(lambda: self.server.create_playlist(name, tracks), done, self.toast)
-        self._ask_name("Neue Playlist", "", "Anlegen", make)
+        self._ask_name(_("Neue Playlist"), "", "Anlegen", make)
 
     def _add_to_playlist(self, playlist_id):
         tracks = self._ctx["tracks"]
@@ -173,7 +174,7 @@ class MoreMixin:
         from .window import run
         name = next((p.name for p in self._playlists if p.id == playlist_id), "Playlist")
         run(lambda: self.server.add_to_playlist(playlist_id, tracks),
-            lambda _: self.toast(f"Zu „{name}“ hinzugefügt" + (f" ({len(tracks)} Titel)" if len(tracks) > 1 else "")), self.toast)
+            lambda _: self.toast(_("Zu „{name}“ hinzugefügt", name=name) + (_(" ({count} Titel)", count=len(tracks)) if len(tracks) > 1 else "")), self.toast)
 
     def _remove_from_playlist(self):
         from .window import run
@@ -181,7 +182,7 @@ class MoreMixin:
         if not p:
             return
         run(lambda: self.server.remove_from_playlist(p.id, tracks),
-            lambda _: (self.toast("Aus der Playlist entfernt"), self.nav.replace([self.playlist_page(p.id, p.name)])), self.toast)
+            lambda _: (self.toast(_("Aus der Playlist entfernt")), self.nav.replace([self.playlist_page(p.id, p.name)])), self.toast)
 
     def reload_playlists(self, select=None):
         from .window import run
@@ -207,64 +208,64 @@ class MoreMixin:
             b = Gtk.Button(label=text, css_classes=["flat"] + ([css] if css else [])); b.get_child().set_xalign(0)
             b.connect("clicked", lambda *_: (pop.popdown(), cb()))
             col.append(b)
-        item("Als Nächstes spielen", lambda: self._queue(tracks, True))
-        item("Nicht mehr anheften" if self.is_pinned(("playlist", p.id, p.name)) else "Anheften", lambda: self.toggle_pin(("playlist", p.id, p.name)))
-        item("Umbenennen …", lambda: self._ask_name("Playlist umbenennen", p.name, "Umbenennen",
+        item(_("Als Nächstes spielen"), lambda: self._queue(tracks, True))
+        item(_("Nicht mehr anheften") if self.is_pinned(("playlist", p.id, p.name)) else _("Anheften"), lambda: self.toggle_pin(("playlist", p.id, p.name)))
+        item(_("Umbenennen …"), lambda: self._ask_name(_("Playlist umbenennen"), p.name, _("Umbenennen"),
                                                     lambda n: run(lambda: self.server.rename_playlist(p.id, n),
                                                                   lambda _: (self.reload_playlists(select=p.id), self.toast("Umbenannt")), self.toast)))
-        item("Freigeben …", lambda: self.share_dialog(p))
+        item(_("Freigeben …"), lambda: self.share_dialog(p))
         col.append(Gtk.Separator(margin_top=4, margin_bottom=4))
 
         def delete():
-            d = Adw.AlertDialog(heading=f"„{p.name}“ löschen?", body="Die Playlist verschwindet vom Server – für alle, mit denen sie geteilt ist. Die Musik bleibt.")
-            d.add_response("cancel", "Abbrechen"); d.add_response("del", "Löschen")
+            d = Adw.AlertDialog(heading=_("„{name}“ löschen?", name=p.name), body=_("Die Playlist verschwindet vom Server – für alle, mit denen sie geteilt ist. Die Musik bleibt."))
+            d.add_response("cancel", _("Abbrechen")); d.add_response("del", _("Löschen"))
             d.set_response_appearance("del", Adw.ResponseAppearance.DESTRUCTIVE); d.set_close_response("cancel")
             d.connect("response", lambda d, r: run(lambda: self.server.delete_playlist(p.id),
-                                                   lambda _: (self.toast("Playlist gelöscht"), self.reload_playlists(), self.show_page("recent")),
+                                                   lambda _: (self.toast(_("Playlist gelöscht")), self.reload_playlists(), self.show_page("recent")),
                                                    self.toast) if r == "del" else None)
             d.present(self)
-        item("Playlist löschen …", delete, "destructive-text")
+        item(_("Playlist löschen …"), delete, "destructive-text")
         pop.set_child(col)
         btn = Gtk.MenuButton(icon_name="view-more-horizontal-symbolic", css_classes=["flat", "circular"], valign=Gtk.Align.CENTER,
-                             tooltip_text="Weitere Optionen", popover=pop)
+                             tooltip_text=_("Weitere Optionen"), popover=pop)
         return btn
 
     def share_dialog(self, p):
         """Card f3cba42b: for everyone or chosen users of this server, each with "listen" or "listen and change"."""
         from .window import run
-        d = Adw.Dialog(title="Freigeben", content_width=420)
+        d = Adw.Dialog(title=_("Freigeben"), content_width=420)
         tv = Adw.ToolbarView(); tv.add_top_bar(Adw.HeaderBar())
         page = Adw.PreferencesPage(); tv.set_content(page); d.set_child(tv)
         d.present(self)
 
         def show(s):
             if s is None:
-                page.add(Adw.PreferencesGroup(description="Dieser Server erlaubt keine Freigabe von Playlists.")); return
-            g = Adw.PreferencesGroup(title=f"„{p.name}“", description="Wer auf diesem Server die Playlist sehen darf. Mehr nicht – nichts verlässt deinen Server.")
-            everyone = Adw.SwitchRow(title="Für alle auf diesem Server", subtitle="Alle dürfen zuhören", active=s.everyone)
+                page.add(Adw.PreferencesGroup(description=_("Dieser Server erlaubt keine Freigabe von Playlists."))); return
+            g = Adw.PreferencesGroup(title=f"„{p.name}“", description=_("Wer auf diesem Server die Playlist sehen darf. Mehr nicht – nichts verlässt deinen Server."))
+            everyone = Adw.SwitchRow(title=_("Für alle auf diesem Server"), subtitle=_("Alle dürfen zuhören"), active=s.everyone)
             g.add(everyone); page.add(g)
-            levels = [("none", "Nicht freigegeben"), ("read", "Darf zuhören"), ("write", "Darf zuhören und ändern")]
+            levels = [("none", _("Nicht freigegeben")), ("read", _("Darf zuhören")), ("write", _("Darf zuhören und ändern"))]
             rows = {}
             if s.per_user and s.users:
-                ug = Adw.PreferencesGroup(title="Einzelne Personen")
+                ug = Adw.PreferencesGroup(title=_("Einzelne Personen"))
                 for u in s.users:
                     r = Adw.ComboRow(title=u.name, model=Gtk.StringList.new([l[1] for l in levels]))
                     r.set_selected([l[0] for l in levels].index(u.level) if u.level in [l[0] for l in levels] else 0)
                     ug.add(r); rows[u.id] = r
                 page.add(ug)
             if not s.can_manage:
-                g.set_description("Du darfst diese Playlist hören, aber nicht freigeben – das kann nur, wer sie angelegt hat.")
+                g.set_description(_("Du darfst diese Playlist hören, aber nicht freigeben – das kann nur, wer sie angelegt hat."))
                 everyone.set_sensitive(False)
                 for r in rows.values():
                     r.set_sensitive(False)
                 return
-            save = Gtk.Button(label="Sichern", css_classes=["suggested-action", "pill"], halign=Gtk.Align.CENTER, margin_top=12)
+            save = Gtk.Button(label=_("Sichern"), css_classes=["suggested-action", "pill"], halign=Gtk.Align.CENTER, margin_top=12)
             sg = Adw.PreferencesGroup(); sg.add(save); page.add(sg)
 
             def store(*_):
                 users = {uid: levels[r.get_selected()][0] for uid, r in rows.items()}
                 save.set_sensitive(False)
-                run(lambda: self.server.share(p.id, users, everyone.get_active()), lambda _: (d.close(), self.toast("Freigabe gesichert")),
+                run(lambda: self.server.share(p.id, users, everyone.get_active()), lambda _: (d.close(), self.toast(_("Freigabe gesichert"))),
                     lambda m: (save.set_sensitive(True), self.toast(m)))
             save.connect("clicked", store)
         run(lambda: self.server.sharing(p.id), show, lambda m: (d.close(), self.toast(m)))
@@ -273,9 +274,9 @@ class MoreMixin:
     def start_page(self):
         from .window import run
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        box.append(Gtk.Label(label="Start", xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=8))
+        box.append(Gtk.Label(label=_("Start"), xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=8))
         slots = {}
-        for key, title in (("recent", "Zuletzt gespielt"), ("mixes", "Mixe für dich"), ("newest", "Neu hinzugefügt"), ("frequent", "Oft gehört")):
+        for key, title in (("recent", _("Zuletzt gespielt")), ("mixes", _("Mixe für dich")), ("newest", _("Neu hinzugefügt")), ("frequent", _("Oft gehört"))):
             holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL); slots[key] = holder; box.append(holder)
 
         def heading(holder, title):
@@ -287,14 +288,14 @@ class MoreMixin:
                     heading(slots[key], title)
                     slots[key].append(shelf([self.album_tile(a) for a in items]))
             run(lambda: self.server.albums(key, 20), show)
-        albums("recent", "Zuletzt gespielt")
-        heading(slots["mixes"], "Mixe für dich")
-        slots["mixes"].append(shelf([self._mix_tile("Lieblings-Mix", "Deine Favoriten und Ähnliches", "favoriten", "mix-pink"),
-                                     self._mix_tile("Neu entdecken", "Noch nie gehört", "entdecken", "mix-blue")]))
-        albums("newest", "Neu hinzugefügt")
-        albums("frequent", "Oft gehört")
+        albums("recent", _("Zuletzt gespielt"))
+        heading(slots["mixes"], _("Mixe für dich"))
+        slots["mixes"].append(shelf([self._mix_tile(_("Lieblings-Mix"), _("Deine Favoriten und Ähnliches"), "favoriten", "mix-pink"),
+                                     self._mix_tile(_("Neu entdecken"), _("Noch nie gehört"), "entdecken", "mix-blue")]))
+        albums("newest", _("Neu hinzugefügt"))
+        albums("frequent", _("Oft gehört"))
         box.append(Gtk.Box(height_request=30))
-        return self._page("Start", self._scroll(box))
+        return self._page(_("Start"), self._scroll(box))
 
     def _mix_tile(self, title, sub, kind, css):
         b = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, width_request=180)
@@ -308,11 +309,11 @@ class MoreMixin:
 
     def mix_page(self, kind):
         from .window import run
-        title = "Lieblings-Mix" if kind == "favoriten" else "Neu entdecken"
+        title = _("Lieblings-Mix") if kind == "favoriten" else _("Neu entdecken")
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         top = Gtk.Box(margin_start=28, margin_end=28, margin_top=20, margin_bottom=8)
         top.append(_label(title, "large-title")); top.append(Gtk.Box(hexpand=True))
-        again = Gtk.Button(label="Neu mischen", css_classes=["flat", "red-text"], valign=Gtk.Align.CENTER); top.append(again)
+        again = Gtk.Button(label=_("Neu mischen"), css_classes=["flat", "red-text"], valign=Gtk.Align.CENTER); top.append(again)
         box.append(top)
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL); box.append(body)
         server = self.server
@@ -338,8 +339,8 @@ class MoreMixin:
             while (c := body.get_first_child()) is not None:
                 body.remove(c)
             if not tracks:
-                body.append(Adw.StatusPage(title="Noch nichts da", description="Markiere Titel mit ★ – daraus entsteht dein Mix." if kind == "favoriten"
-                                           else "Hier ist gerade nichts Ungehörtes."))
+                body.append(Adw.StatusPage(title=_("Noch nichts da"), description=_("Markiere Titel mit ★ – daraus entsteht dein Mix.") if kind == "favoriten"
+                                           else _("Hier ist gerade nichts Ungehörtes.")))
                 return
             body.append(self._wrap(self._play_buttons(tracks)))
             body.append(self.track_list(tracks, show_art=True))
@@ -354,7 +355,7 @@ class MoreMixin:
     def genres_page(self):
         from .window import run
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.append(Gtk.Label(label="Genres", xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=8))
+        box.append(Gtk.Label(label=_("Genres"), xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=8))
         grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True, max_children_per_line=8, min_children_per_line=2,
                            column_spacing=16, row_spacing=16, margin_start=28, margin_end=28, margin_bottom=28, valign=Gtk.Align.START)
         box.append(grid)
@@ -371,9 +372,9 @@ class MoreMixin:
                 tile.add_controller(click); tile.set_cursor(Gdk.Cursor.new_from_name("pointer"))
                 grid.append(tile)
             if not genres:
-                box.append(Adw.StatusPage(title="Keine Genres", description="Dein Server kennt für die Musik noch keine Genres."))
+                box.append(Adw.StatusPage(title=_("Keine Genres"), description=_("Dein Server kennt für die Musik noch keine Genres.")))
         run(self.server.genres, show, self.toast)
-        return self._page("Genres", self._scroll(box))
+        return self._page(_("Genres"), self._scroll(box))
 
     def genre_name(self, name):
         """Genres stay English in the files; shown in the system's language (card aa4935bb)."""
@@ -396,23 +397,22 @@ class MoreMixin:
         off = self.app.offline
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         top = Gtk.Box(margin_start=28, margin_end=28, margin_top=20, margin_bottom=4)
-        top.append(_label("Geladen", "large-title")); top.append(Gtk.Box(hexpand=True))
+        top.append(_label(_("Geladen"), "large-title")); top.append(Gtk.Box(hexpand=True))
         box.append(top)
         tracks = off.tracks()
         size = off.size()
-        box.append(Gtk.Label(label=(f"{len(tracks)} Titel auf diesem Computer · {size / 1e9:.1f} GB" if size > 1e9 else
-                                    f"{len(tracks)} Titel auf diesem Computer · {size / 1e6:.0f} MB") if tracks else "",
+        box.append(Gtk.Label(label=(_("{count} Titel auf diesem Computer · {value:.1f} GB", count=len(tracks), value=size / 1e9) if size > 1e9 else
+                                    _("{count} Titel auf diesem Computer · {value:.0f} MB", count=len(tracks), value=size / 1e6)) if tracks else "",
                              xalign=0, css_classes=["dim"], margin_start=28, margin_bottom=10))
         if off.busy():
-            stop = Gtk.Button(label=f"Laden stoppen ({len(off.waiting) + len(off.live)} offen)", css_classes=["flat", "red-text"], valign=Gtk.Align.CENTER)
+            stop = Gtk.Button(label=_("Laden stoppen ({value} offen)", value=len(off.waiting) + len(off.live)), css_classes=["flat", "red-text"], valign=Gtk.Align.CENTER)
             stop.connect("clicked", lambda *_: off.cancel())
             top.append(stop)
         if not tracks:
-            box.append(Adw.StatusPage(icon_name="folder-download-symbolic", title="Noch nichts geladen",
-                                      description="Klicke bei einem Titel auf das Server-Symbol oder bei Alben und Playlists auf den Pfeil – "
-                                                  "dann spielt die Musik auch ohne Verbindung zum Server."))
+            box.append(Adw.StatusPage(icon_name="folder-download-symbolic", title=_("Noch nichts geladen"),
+                                      description=_("Klicke bei einem Titel auf das Server-Symbol oder bei Alben und Playlists auf den Pfeil – dann spielt die Musik auch ohne Verbindung zum Server.")))
         else:
             box.append(self._wrap(self._play_buttons(tracks)))
             box.append(self.track_list(tracks, show_art=True))
             box.append(Gtk.Box(height_request=30))
-        return self._page("Geladen", self._scroll(box))
+        return self._page(_("Geladen"), self._scroll(box))

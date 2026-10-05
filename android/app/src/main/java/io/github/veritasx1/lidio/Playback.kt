@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
@@ -136,7 +138,7 @@ class Playback(private val context: Context) {
             c.addListener(object : Player.Listener {
                 override fun onEvents(player: Player, events: Player.Events) = refresh()
                 override fun onPlayerError(e: androidx.media3.common.PlaybackException) {
-                    error = "Wiedergabe nicht möglich – ${if (e.errorCode in 2000..2999) "keine Verbindung zum Server" else "Format nicht unterstützt"}."
+                    error = tr("Wiedergabe nicht möglich – {if}.", "if" to (if (e.errorCode in 2000..2999) "keine Verbindung zum Server" else "Format nicht unterstützt"))
                 }
             })
             refresh()

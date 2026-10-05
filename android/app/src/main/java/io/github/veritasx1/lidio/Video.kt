@@ -2,6 +2,8 @@
 
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.view.SurfaceView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -56,7 +58,7 @@ import kotlinx.coroutines.withContext
 fun VideoScreen(state: AppState, track: Track, onClose: () -> Unit) {
     val context = LocalContext.current
     val engine = remember { Variant.engine(context) } ?: return
-    var status by remember { mutableStateOf<String?>("Sucht das Video …") }
+    var status by remember { mutableStateOf<String?>(tr("Sucht das Video …")) }
     var title by remember { mutableStateOf("") }
     var ratio by remember { mutableFloatStateOf(16f / 9f) }
     var playing by remember { mutableStateOf(false) }
@@ -69,15 +71,15 @@ fun VideoScreen(state: AppState, track: Track, onClose: () -> Unit) {
         player.addListener(object : Player.Listener {
             override fun onVideoSizeChanged(size: VideoSize) { if (size.height > 0) ratio = size.width * size.pixelWidthHeightRatio / size.height }
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { status = "Das Video ließ sich nicht abspielen." }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { status = tr("Das Video ließ sich nicht abspielen.") }
         })
         onDispose { player.release() }
     }
     LaunchedEffect(track.id) {
         try {
             val (hit, parts) = withContext(Dispatchers.IO) {
-                val hit = engine.musicVideo(track.title, track.artist) ?: throw ServerError("Kein Video zu diesem Titel gefunden.")
-                status = "Lädt „${hit.title}“ …"
+                val hit = engine.musicVideo(track.title, track.artist) ?: throw ServerError(tr("Kein Video zu diesem Titel gefunden."))
+                status = tr("Lädt „{title}“ …", "title" to hit.title)
                 hit to engine.stream(hit)
             }
             title = hit.title
@@ -89,7 +91,7 @@ fun VideoScreen(state: AppState, track: Track, onClose: () -> Unit) {
             player.setMediaSource(if (sources.size == 1) sources[0] else MergingMediaSource(*sources.toTypedArray()))
             player.prepare(); player.play()
             status = null
-        } catch (e: ServerError) { status = e.message } catch (e: Exception) { status = "Das Video ließ sich nicht laden." }
+        } catch (e: ServerError) { status = e.message } catch (e: Exception) { status = tr("Das Video ließ sich nicht laden.") }
     }
     LaunchedEffect(playing) { while (playing) { position = if (player.duration > 0) player.currentPosition.toFloat() / player.duration else 0f; delay(500) } }
     LaunchedEffect(controls, playing) { if (controls && playing) { delay(3500); controls = false } }
@@ -105,12 +107,12 @@ fun VideoScreen(state: AppState, track: Track, onClose: () -> Unit) {
         androidx.compose.animation.AnimatedVisibility(controls || status != null, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)).windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp)) {
                 Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f)).clickable(role = Role.Button, onClick = onClose)
-                    .semantics { contentDescription = "Video schließen" }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Close, Color.White, 16.dp, weight = 2.6f) }
+                    .semantics { contentDescription = tr("Video schließen") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Close, Color.White, 16.dp, weight = 2.6f) }
                 if (status == null) {
                     Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(48.dp)) {
                         SkipButton(forward = false) { skip(-10_000) }
                         Box(Modifier.size(72.dp).clip(CircleShape).clickable(role = Role.Button) { if (player.isPlaying) player.pause() else player.play(); controls = true }
-                            .semantics { contentDescription = if (playing) "Pause" else "Wiedergabe" }, contentAlignment = Alignment.Center) {
+                            .semantics { contentDescription = if (playing) tr("Pause") else tr("Wiedergabe") }, contentAlignment = Alignment.Center) {
                             SymbolIcon(if (playing) Symbol.Pause else Symbol.Play, Color.White, 44.dp, filled = true)
                         }
                         SkipButton(forward = true) { skip(10_000) }
@@ -121,7 +123,7 @@ fun VideoScreen(state: AppState, track: Track, onClose: () -> Unit) {
                             SourceBadge(WebSource.Video)
                             if (title.isNotEmpty()) Label(title, 13f, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(start = 6.dp))
                         }
-                        IosSlider(position, { position = it; controls = true }, "Position im Video", fill = Color.White, track = Color.White.copy(alpha = 0.3f), thumb = false,
+                        IosSlider(position, { position = it; controls = true }, tr("Position im Video"), fill = Color.White, track = Color.White.copy(alpha = 0.3f), thumb = false,
                             onRelease = { if (player.duration > 0) player.seekTo((position * player.duration).toLong()) })
                         val total = (player.duration.coerceAtLeast(0) / 1000).toInt()
                         Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
@@ -140,7 +142,7 @@ fun VideoScreen(state: AppState, track: Track, onClose: () -> Unit) {
 @Composable
 private fun SkipButton(forward: Boolean, onClick: () -> Unit) {
     Box(Modifier.size(52.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick)
-        .semantics { contentDescription = if (forward) "10 Sekunden vor" else "10 Sekunden zurück" }, contentAlignment = Alignment.Center) {
+        .semantics { contentDescription = if (forward) tr("10 Sekunden vor") else tr("10 Sekunden zurück") }, contentAlignment = Alignment.Center) {
         androidx.compose.foundation.Canvas(Modifier.size(40.dp)) {
             val w = 2.4.dp.toPx(); val r = size.minDimension / 2 - w
             val c = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)

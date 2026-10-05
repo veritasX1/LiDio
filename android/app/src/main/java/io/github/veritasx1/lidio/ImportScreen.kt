@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -68,10 +70,10 @@ fun ImportScreen(state: AppState, server: MusicServer, initial: List<Wanted> = e
             context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
         }.getOrNull() ?: "Playlist"
         val text = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } }.getOrNull()
-        if (text == null) { message = "Die Datei ließ sich nicht lesen."; return@rememberLauncherForActivityResult }
+        if (text == null) { message = tr("Die Datei ließ sich nicht lesen."); return@rememberLauncherForActivityResult }
         wanted = Lists.read(text, file); results.clear()
         if (name.isBlank()) name = file.substringBeforeLast('.')
-        message = if (wanted.isEmpty()) "In der Datei steht keine Playlist, die LiDio lesen kann." else null
+        message = if (wanted.isEmpty()) tr("In der Datei steht keine Playlist, die LiDio lesen kann.") else null
     }
 
     fun compare() {
@@ -93,22 +95,22 @@ fun ImportScreen(state: AppState, server: MusicServer, initial: List<Wanted> = e
                     cover?.let { url -> runCatching { java.net.URL(url).openStream().use { it.readBytes() } }.getOrNull()?.let { server.setPlaylistCover(made.id, it) } }
                 } } }
             made.onSuccess { state.back(); state.open(Route.PlaylistPage(it.id, it.name)) }
-                .onFailure { message = (it as? ServerError)?.message ?: "Die Playlist ließ sich nicht anlegen." }
+                .onFailure { message = (it as? ServerError)?.message ?: tr("Die Playlist ließ sich nicht anlegen.") }
         }
     }
 
     Column(Modifier.fillMaxSize()) {
-        NavBar(state, "Importieren")
+        NavBar(state, tr("Importieren"))
         LazyColumn(Modifier.fillMaxSize().background(ink.grouped), contentPadding = chromePadding()) {
-            largeTitle("Playlist importieren", topInset = false)
+            largeTitle(tr("Playlist importieren"), topInset = false)
             item {
                 Column(Modifier.padding(16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
-                    ListRow("Datei wählen …", "M3U, M3U8, PLS, XSPF, CSV oder Text", onClick = { picker.launch(arrayOf("*/*")) }, height = 60.dp,
+                    ListRow(tr("Datei wählen …"), tr("M3U, M3U8, PLS, XSPF, CSV oder Text"), onClick = { picker.launch(arrayOf("*/*")) }, height = 60.dp,
                         titleColor = ink.tint, leading = { SymbolIcon(Symbol.Import, ink.tint, 24.dp) })
                     Column(Modifier.padding(16.dp)) {
-                        Label("Oder Liste einfügen – eine Zeile je Titel, „Interpret – Titel“", 13f, color = ink.secondary, lines = 2)
+                        Label(tr("Oder Liste einfügen – eine Zeile je Titel, „Interpret – Titel“"), 13f, color = ink.secondary, lines = 2)
                         Box(Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(min = 88.dp).clip(RoundedCornerShape(8.dp)).background(ink.grouped).padding(10.dp)) {
-                            if (pasted.isEmpty()) Label("Die Testtöne – Quinte\nKreis Quartett – Spirale", 15f, color = ink.tertiary, lines = 3)
+                            if (pasted.isEmpty()) Label(tr("Die Testtöne – Quinte\nKreis Quartett – Spirale"), 15f, color = ink.tertiary, lines = 3)
                             BasicTextField(pasted, { text ->
                                 pasted = text; results.clear()
                                 // A Deezer or Spotify playlist link: fetch its titles (only if that source is switched on).
@@ -117,7 +119,7 @@ fun ImportScreen(state: AppState, server: MusicServer, initial: List<Wanted> = e
                                     val got = withContext(Dispatchers.IO) { runCatching { RemoteTracks.load(state.playback.settings, RemoteList(link.first, link.second, "")) } }
                                     wanted = got.getOrNull()?.second.orEmpty()
                                     got.getOrNull()?.first?.name?.takeIf { it.isNotEmpty() && name.isEmpty() }?.let { name = it }
-                                    message = got.exceptionOrNull()?.message ?: if (wanted.isEmpty()) "Die Playlist ließ sich nicht laden." else null
+                                    message = got.exceptionOrNull()?.message ?: if (wanted.isEmpty()) tr("Die Playlist ließ sich nicht laden.") else null
                                 }
                                 else wanted = Lists.read(text)
                             }, textStyle = style(15f, color = ink.label),
@@ -125,18 +127,18 @@ fun ImportScreen(state: AppState, server: MusicServer, initial: List<Wanted> = e
                         }
                     }
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Label("Name", 17f, modifier = Modifier.width(72.dp))
+                        Label(tr("Name"), 17f, modifier = Modifier.width(72.dp))
                         Box(Modifier.weight(1f)) {
-                            if (name.isEmpty()) Label("Neue Playlist", 17f, color = ink.tertiary)
+                            if (name.isEmpty()) Label(tr("Neue Playlist"), 17f, color = ink.tertiary)
                             BasicTextField(name, { name = it }, singleLine = true, textStyle = style(17f, color = ink.label), cursorBrush = SolidColor(ink.tint),
-                                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Name der Playlist" })
+                                modifier = Modifier.fillMaxWidth().semantics { contentDescription = tr("Name der Playlist") })
                         }
                     }
                 }
             }
             message?.let { item { Label(it, 15f, 500, Red, Modifier.padding(horizontal = 32.dp), lines = 3) } }
             if (wanted.isNotEmpty() && results.isEmpty()) item {
-                Wide(if (progress >= 0) "Abgleich … ${progress + 1} von ${wanted.size}" else "${wanted.size} Titel mit dem Server abgleichen", progress < 0) { compare() }
+                Wide(if (progress >= 0) tr("Abgleich … {value} von {size}", "value" to (progress + 1), "size" to wanted.size) else tr("{size} Titel mit dem Server abgleichen", "size" to wanted.size), progress < 0) { compare() }
             }
             if (results.isNotEmpty()) {
                 val found = results.count { it.match == Match.Found }; val unsure = results.count { it.match == Match.Unsure }
@@ -146,26 +148,26 @@ fun ImportScreen(state: AppState, server: MusicServer, initial: List<Wanted> = e
                         Count(found, "gefunden", Green); Count(unsure, "unsicher", Orange); Count(missing, "fehlen", Red)
                     }
                 }
-                item { Wide("Als Playlist anlegen (${found + unsure} Titel)", found + unsure > 0) { create() } }
+                item { Wide(tr("Als Playlist anlegen ({value} Titel)", "value" to (found + unsure)), found + unsure > 0) { create() } }
                 // LiDio privat: what the server lacks can come from the internet – the best match for each (card 1843f577).
                 if (missing > 0 && Variant.PRIVATE) item {
                     var fetching by remember { mutableStateOf<String?>(null) }
-                    Label(fetching ?: "Fehlende aus dem Netz laden ($missing)", 17f, 400, ink.tint, Modifier.fillMaxWidth().clickable(role = Role.Button, enabled = fetching == null) {
-                        fetching = "Sucht bei ${Variant.MUSIC} …"
+                    Label(fetching ?: tr("Fehlende aus dem Netz laden ({missing})", "missing" to missing), 17f, 400, ink.tint, Modifier.fillMaxWidth().clickable(role = Role.Button, enabled = fetching == null) {
+                        fetching = tr("Sucht bei {MUSIC} …", "MUSIC" to Variant.MUSIC)
                         WebDownloads.addSearched(context, results.filter { it.match == Match.Missing }.map { it.wanted }) { done, total ->
-                            fetching = if (done < total) "Sucht bei ${Variant.MUSIC} … $done von $total" else "$total in der Warteschlange – siehe Mediathek → Aus dem Netz"
+                            fetching = if (done < total) tr("Sucht bei {MUSIC} … {done} von {total}", "MUSIC" to Variant.MUSIC, "done" to done, "total" to total) else tr("{total} in der Warteschlange – siehe Mediathek → Aus dem Netz", "total" to total)
                         }
                     }.padding(12.dp), align = TextAlign.Center, lines = 2)
                 }
                 if (missing > 0) item {
-                    Label("Fehlende als Text teilen", 17f, 400, ink.tint, Modifier.fillMaxWidth().clickable(role = Role.Button) {
+                    Label(tr("Fehlende als Text teilen"), 17f, 400, ink.tint, Modifier.fillMaxWidth().clickable(role = Role.Button) {
                         val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, Matcher.missingText(results))
-                            .putExtra(Intent.EXTRA_SUBJECT, "Fehlt in „${name.ifEmpty { "Playlist" }}“")
-                        context.startActivity(Intent.createChooser(send, "Fehlende Titel teilen"))
+                            .putExtra(Intent.EXTRA_SUBJECT, tr("Fehlt in „{value}“", "value" to (name.ifEmpty { "Playlist" })))
+                        context.startActivity(Intent.createChooser(send, tr("Fehlende Titel teilen")))
                     }.padding(12.dp), align = TextAlign.Center)
                 }
                 item {
-                    Segmented(listOf("Alle", "Unsicher", "Fehlen"), filter, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { filter = it }
+                    Segmented(listOf(tr("Alle"), tr("Unsicher"), "Fehlen"), filter, Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { filter = it }
                 }
                 item {
                     Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
@@ -174,8 +176,8 @@ fun ImportScreen(state: AppState, server: MusicServer, initial: List<Wanted> = e
                             val (symbol, colour) = when (r.match) { Match.Found -> Symbol.Check to Green; Match.Unsure -> Symbol.Missing to Orange; Match.Missing -> Symbol.Close to Red }
                             ListRow(r.wanted.toString(), when (r.match) {
                                     Match.Found -> "${r.track?.artist} – ${r.track?.title}"
-                                    Match.Unsure -> "Vielleicht: ${r.track?.artist} – ${r.track?.title} · antippen zum Wählen"
-                                    Match.Missing -> if (Variant.PRIVATE) "Nicht auf dem Server · antippen: im Netz suchen" else "Nicht auf dem Server"
+                                    Match.Unsure -> tr("Vielleicht: {value} – {value2} · antippen zum Wählen", "value" to (r.track?.artist), "value2" to (r.track?.title))
+                                    Match.Missing -> if (Variant.PRIVATE) tr("Nicht auf dem Server · antippen: im Netz suchen") else tr("Nicht auf dem Server")
                                 }, height = 60.dp, onClick = when {
                                     r.match == Match.Missing && Variant.PRIVATE -> ({
                                         state.searchFor = listOf(r.wanted.artist, r.wanted.title).filter { it.isNotEmpty() }.joinToString(" ")
@@ -202,7 +204,7 @@ fun ImportScreen(state: AppState, server: MusicServer, initial: List<Wanted> = e
                         ListRow(t.title, "${t.artist} · ${t.album}", height = 56.dp, onClick = { results[i] = r.copy(match = Match.Found, track = t); choosing = null })
                     }
                 }
-                ListRow("Weglassen", titleColor = Red, separator = false, onClick = { results[i] = r.copy(match = Match.Missing, track = null); choosing = null })
+                ListRow(tr("Weglassen"), titleColor = Red, separator = false, onClick = { results[i] = r.copy(match = Match.Missing, track = null); choosing = null })
             }
         }
     }

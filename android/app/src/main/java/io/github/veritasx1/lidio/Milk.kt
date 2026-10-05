@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.Context
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
@@ -128,25 +130,25 @@ fun MilkScreen(state: AppState, onClose: () -> Unit) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(44.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f)).clickable(role = Role.Button, onClick = onClose)
-                        .semantics { contentDescription = "Milkdrop schließen" }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Close, Color.White, 16.dp, weight = 2.6f) }
+                        .semantics { contentDescription = tr("Milkdrop schließen") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Close, Color.White, 16.dp, weight = 2.6f) }
                     Column(Modifier.weight(1f).padding(start = 12.dp)) {
                         state.playback.current?.let { Label(it.title, 17f, 600, Color.White); Label(it.artist, 13f, color = Color.White.copy(alpha = 0.7f)) }
                     }
                 }
                 Spacer(Modifier.weight(1f))
                 val name = presets.getOrNull(Math.floorMod(index, presets.size.coerceAtLeast(1)))
-                Label(name?.let { "${it.parentFile?.name} · ${it.nameWithoutExtension}" } ?: "Keine Presets", 13f, color = Color.White.copy(alpha = 0.8f), lines = 2,
+                Label(name?.let { "${it.parentFile?.name} · ${it.nameWithoutExtension}" } ?: tr("Keine Presets"), 13f, color = Color.White.copy(alpha = 0.8f), lines = 2,
                     modifier = Modifier.padding(bottom = 10.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Circle(Symbol.Backward, "Voriges Preset") { index--; controls = true }
+                    Circle(Symbol.Backward, tr("Voriges Preset")) { index--; controls = true }
                     Spacer(Modifier.size(16.dp))
-                    Circle(if (state.playback.playing) Symbol.Pause else Symbol.Play, if (state.playback.playing) "Pause" else "Wiedergabe") { state.playback.toggle(); controls = true }
+                    Circle(if (state.playback.playing) Symbol.Pause else Symbol.Play, if (state.playback.playing) tr("Pause") else tr("Wiedergabe")) { state.playback.toggle(); controls = true }
                     Spacer(Modifier.size(16.dp))
-                    Circle(Symbol.Forward, "Nächstes Preset") { index++; controls = true }
+                    Circle(Symbol.Forward, tr("Nächstes Preset")) { index++; controls = true }
                     Spacer(Modifier.weight(1f))
                     Box(Modifier.size(44.dp).clip(CircleShape).background(if (shuffle) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.2f))
                         .clickable(role = Role.Switch) { shuffle = !shuffle; prefs.edit().putBoolean("zufall", shuffle).apply(); controls = true }
-                        .semantics { contentDescription = "Presets wechseln von selbst: ${if (shuffle) "an" else "aus"}" }, contentAlignment = Alignment.Center) {
+                        .semantics { contentDescription = tr("Presets wechseln von selbst: {if}", "if" to (if (shuffle) "an" else "aus")) }, contentAlignment = Alignment.Center) {
                         SymbolIcon(Symbol.Shuffle, if (shuffle) Color.Black else Color.White, 20.dp)
                     }
                 }
@@ -177,7 +179,7 @@ fun MilkWindow(state: AppState, width: androidx.compose.ui.unit.Dp, height: andr
     Box(Modifier.size(width, height).background(Color.Black)) {
         AndroidView({ c -> GLSurfaceView(c).apply { setEGLContextClientVersion(3); setRenderer(renderer); view = this } }, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().androidx_combined(onClick = { state.milk = true }, onLongClick = onMenu, onDouble = { index++ })
-            .semantics { contentDescription = "Milkdrop – antippen für Vollbild" })
+            .semantics { contentDescription = tr("Milkdrop – antippen für Vollbild") })
     }
 }
 

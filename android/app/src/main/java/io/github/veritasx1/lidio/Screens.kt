@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -68,7 +70,7 @@ fun NavBar(state: AppState, title: String = "", trailing: (@Composable () -> Uni
     // iOS 26: back is a round glass button (no text), toolbar buttons sit in glass too.
     if (LocalModern.current) {
         Box(Modifier.fillMaxWidth().background(ink.background).windowInsetsPadding(WindowInsets.statusBars).height(56.dp)) {
-            Box(Modifier.align(Alignment.CenterStart).padding(start = 16.dp)) { GlassCircle(Symbol.ChevronLeft, "Zurück zu $previous") { state.back() } }
+            Box(Modifier.align(Alignment.CenterStart).padding(start = 16.dp)) { GlassCircle(Symbol.ChevronLeft, tr("Zurück zu {previous}", "previous" to previous)) { state.back() } }
             Label(title, 17f, 600, modifier = Modifier.align(Alignment.Center).width(180.dp), align = TextAlign.Center)
             trailing?.let { Box(Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).height(44.dp).glass(RoundedCornerShape(22.dp), 6.dp)
                 .padding(horizontal = 12.dp), contentAlignment = Alignment.Center) { it() } }
@@ -76,7 +78,7 @@ fun NavBar(state: AppState, title: String = "", trailing: (@Composable () -> Uni
         return
     }
     Box(Modifier.fillMaxWidth().background(ink.background).windowInsetsPadding(WindowInsets.statusBars).height(44.dp)) {
-        Row(Modifier.align(Alignment.CenterStart).clickable(role = Role.Button, onClickLabel = "Zurück") { state.back() }
+        Row(Modifier.align(Alignment.CenterStart).clickable(role = Role.Button, onClickLabel = tr("Zurück")) { state.back() }
             .padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             SymbolIcon(Symbol.ChevronLeft, ink.tint, 22.dp, weight = 2.4f)
             Label(previous, 17f, 400, ink.tint, Modifier.padding(start = 2.dp).width(120.dp))
@@ -87,10 +89,10 @@ fun NavBar(state: AppState, title: String = "", trailing: (@Composable () -> Uni
 }
 
 fun titleOf(route: Route): String = when (route) {
-    Route.Library -> "Mediathek"; Route.Artists -> "Interpreten"; Route.Albums -> "Alben"; Route.Tracks -> "Titel"
-    Route.Playlists -> "Playlists"; Route.Servers -> "Server"; Route.Downloaded -> "Geladen"; Route.Import -> "Importieren"; Route.Skins -> "Skins"; Route.Web -> "Aus dem Netz"; Route.Favorites -> "Lieblingstitel"; is Route.GenrePage -> route.genre.name; is Route.MixPage -> if (route.kind == "favoriten") "Lieblings-Mix" else "Neu entdecken"; Route.Guide -> "Anleitung"
-    is Route.RemotePage -> route.list.name; is Route.ImportWith -> "Importieren"
-    is Route.ArtistPage -> route.name; is Route.AlbumPage -> "Album"; is Route.PlaylistPage -> route.name
+    Route.Library -> tr("Mediathek"); Route.Artists -> tr("Interpreten"); Route.Albums -> tr("Alben"); Route.Tracks -> tr("Titel")
+    Route.Playlists -> tr("Playlists"); Route.Servers -> tr("Server"); Route.Downloaded -> tr("Geladen"); Route.Import -> tr("Importieren"); Route.Skins -> tr("Skins"); Route.Web -> tr("Aus dem Netz"); Route.Favorites -> tr("Lieblingstitel"); is Route.GenrePage -> route.genre.name; is Route.MixPage -> if (route.kind == "favoriten") tr("Lieblings-Mix") else tr("Neu entdecken"); Route.Guide -> tr("Anleitung")
+    is Route.RemotePage -> route.list.name; is Route.ImportWith -> tr("Importieren")
+    is Route.ArtistPage -> route.name; is Route.AlbumPage -> tr("Album"); is Route.PlaylistPage -> route.name
 }
 
 fun LazyListScope.largeTitle(text: String, trailing: (@Composable () -> Unit)? = null, topInset: Boolean = true) {
@@ -104,14 +106,14 @@ fun LazyListScope.largeTitle(text: String, trailing: (@Composable () -> Unit)? =
 }
 
 @Composable
-fun Waiting() = Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { Label("Wird geladen …", 15f, color = Ink.secondary) }
+fun Waiting() = Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { Label(tr("Wird geladen …"), 15f, color = Ink.secondary) }
 
 @Composable
 fun Failed(text: String, retry: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         SymbolIcon(Symbol.Missing, Ink.secondary, 40.dp)
         Label(text, 17f, 500, modifier = Modifier.padding(top = 12.dp), lines = 3, align = TextAlign.Center)
-        Label("Erneut versuchen", 17f, 400, Ink.tint, Modifier.padding(top = 12.dp).clickable(role = Role.Button, onClick = retry))
+        Label(tr("Erneut versuchen"), 17f, 400, Ink.tint, Modifier.padding(top = 12.dp).clickable(role = Role.Button, onClick = retry))
     }
 }
 
@@ -131,8 +133,8 @@ fun AlbumTile(server: MusicServer, album: Album, width: Dp?, state: AppState? = 
     var menu by remember { mutableStateOf(false) }
     if (menu && state != null) CollectionMenu(state, server, Pin("album", album.id, album.title, album.coverId, server.kind == ServerKind.Web), album.artist) { menu = false }
     Column((if (width != null) Modifier.width(width) else Modifier)
-        .combinedClickable(role = Role.Button, onClick = onClick, onLongClick = if (state != null) ({ menu = true }) else null, onLongClickLabel = "Mehr")
-        .semantics { contentDescription = "${album.title} von ${album.artist}" }) {
+        .combinedClickable(role = Role.Button, onClick = onClick, onLongClick = if (state != null) ({ menu = true }) else null, onLongClickLabel = tr("Mehr"))
+        .semantics { contentDescription = tr("{title} von {artist}", "title" to album.title, "artist" to album.artist) }) {
         Cover(server.cover(album.coverId, 400), Modifier.fillMaxWidth().aspectRatio(1f), 8.dp,
             fallback = if (album.coverId == null) ({ server.albumCoverFallback(album.id, 400) }) else null)
         Label(album.title, 13f, 500, modifier = Modifier.padding(top = 6.dp))
@@ -163,8 +165,8 @@ fun TrackRow(state: AppState, server: MusicServer, track: Track, number: Int? = 
     val limit = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
     Box(Modifier.fillMaxWidth().pointerInput(track.id) {
         detectHorizontalDragGestures(onDragEnd = {
-            if (swipe > limit) { state.playback.playNext(server, track); state.notice = "„${track.title}“ kommt als Nächstes." }
-            else if (swipe < -limit) { state.playback.addToQueue(server, track); state.notice = "„${track.title}“ kommt zuletzt." }
+            if (swipe > limit) { state.playback.playNext(server, track); state.notice = tr("„{title}“ kommt als Nächstes.", "title" to track.title) }
+            else if (swipe < -limit) { state.playback.addToQueue(server, track); state.notice = tr("„{title}“ kommt zuletzt.", "title" to track.title) }
             swipe = 0f
         }, onDragCancel = { swipe = 0f }) { _, dx -> swipe = (swipe + dx).coerceIn(-limit * 1.4f, limit * 1.4f) }
     }) {
@@ -189,18 +191,18 @@ fun TrackRow(state: AppState, server: MusicServer, track: Track, number: Int? = 
             when {
                 // Neither on the server nor on the phone – out in the internet: a cloud (Olaf 05.10.2026).
                 server.kind == ServerKind.Web ->
-                    SymbolIcon(Symbol.Cloud, ink.tertiary, 15.dp, modifier = Modifier.padding(end = 8.dp).semantics { contentDescription = "Im Internet" })
+                    SymbolIcon(Symbol.Cloud, ink.tertiary, 15.dp, modifier = Modifier.padding(end = 8.dp).semantics { contentDescription = tr("Im Internet") })
                 key != null && key in Offline.live -> Box(Modifier.padding(end = 8.dp)) {
                     val p = Offline.live[key]
                     if (p == null) WaitingRing(18.dp) else ProgressRing(p, ink.tint, 18.dp)
                 }
                 // Olaf 05.10.2026: where the title is – a small phone (on this phone: loaded, heard, own folders) or a small server.
                 server.kind == ServerKind.Local || state.account?.let { Offline.stored(context, it.id, track) } != null ->
-                    SymbolIcon(Symbol.Phone, ink.secondary, 14.dp, modifier = Modifier.padding(end = 8.dp).semantics { contentDescription = "Auf diesem Telefon" })
+                    SymbolIcon(Symbol.Phone, ink.secondary, 14.dp, modifier = Modifier.padding(end = 8.dp).semantics { contentDescription = tr("Auf diesem Telefon") })
                 // On the server: tap loads this one title onto the phone (Olaf 05.10.2026: single songs, not only whole playlists).
-                else -> Box(Modifier.size(32.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = "Auf dieses Telefon laden") {
+                else -> Box(Modifier.size(32.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = tr("Auf dieses Telefon laden")) {
                         state.account?.let { a -> Offline.download(context, a.id, server, listOf(track)) } }
-                    .semantics { contentDescription = "Auf deinem Server – antippen lädt aufs Telefon" }, contentAlignment = Alignment.Center) {
+                    .semantics { contentDescription = tr("Auf deinem Server – antippen lädt aufs Telefon") }, contentAlignment = Alignment.Center) {
                     SymbolIcon(Symbol.Server, ink.tertiary, 14.dp)
                 }
             }
@@ -221,27 +223,27 @@ fun StartScreen(state: AppState, server: MusicServer) {
     val (frequent, _) = rememberLoad(server, state.generation) { server.albums(AlbumOrder.Frequent, 20) }
     val (lists, retryLists) = rememberLoad(server, state.generation) { if (server.kind == ServerKind.Web) server.playlists() else emptyList() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
-        largeTitle("Start")
-        if (recent.value?.isNotEmpty() == true) { item { SectionHeader("Zuletzt gespielt") }; item { AlbumRow(state, server, recent.value) } }
+        largeTitle(tr("Start"))
+        if (recent.value?.isNotEmpty() == true) { item { SectionHeader(tr("Zuletzt gespielt")) }; item { AlbumRow(state, server, recent.value) } }
         if (server.kind == ServerKind.Web) {
             // LiDio privat without server (card d1f83bf9): what is current – the charts and the web source's playlists first.
-            item { SectionHeader("Charts & Playlists") }
+            item { SectionHeader(tr("Charts & Playlists")) }
             loading(lists, retryLists) { item { PlaylistRow(state, server, it) } }
         }
         // iOS "Für dich": two mixes made from the own library – favourites with similar titles, and what was never played yet.
-        item { SectionHeader("Mixe für dich") }
+        item { SectionHeader(tr("Mixe für dich")) }
         item {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                MixTile("Lieblings-Mix", "Deine Favoriten und Ähnliches", listOf(Color(0xFFFF375F), Color(0xFFBF5AF2)), Modifier.weight(1f)) { state.open(Route.MixPage("favoriten")) }
-                MixTile("Neu entdecken", "Noch nie gehört", listOf(Color(0xFF0A84FF), Color(0xFF30D158)), Modifier.weight(1f)) { state.open(Route.MixPage("entdecken")) }
+                MixTile(tr("Lieblings-Mix"), tr("Deine Favoriten und Ähnliches"), listOf(Color(0xFFFF375F), Color(0xFFBF5AF2)), Modifier.weight(1f)) { state.open(Route.MixPage("favoriten")) }
+                MixTile(tr("Neu entdecken"), tr("Noch nie gehört"), listOf(Color(0xFF0A84FF), Color(0xFF30D158)), Modifier.weight(1f)) { state.open(Route.MixPage("entdecken")) }
             }
         }
-        item { SectionHeader(if (server.kind == ServerKind.Web) "Neuerscheinungen" else "Neu hinzugefügt") }
+        item { SectionHeader(if (server.kind == ServerKind.Web) "Neuerscheinungen" else tr("Neu hinzugefügt")) }
         if (newest.error == null || recent.error == null) loading(newest, retryNewest) { item { AlbumRow(state, server, it) } }
-        if (frequent.value?.isNotEmpty() == true && frequent.value != recent.value) { item { SectionHeader("Oft gehört") }; item { AlbumRow(state, server, frequent.value) } }
+        if (frequent.value?.isNotEmpty() == true && frequent.value != recent.value) { item { SectionHeader(tr("Oft gehört")) }; item { AlbumRow(state, server, frequent.value) } }
         if (recent.error != null && newest.error != null) item {
             Failed(recent.error, retryRecent)
-            Label("Geladene Musik ansehen", 17f, 400, Ink.tint, Modifier.fillMaxWidth().clickable(role = Role.Button) {
+            Label(tr("Geladene Musik ansehen"), 17f, 400, Ink.tint, Modifier.fillMaxWidth().clickable(role = Role.Button) {
                 state.tab = Tab.Library; state.stacks[Tab.Library] = listOf(Route.Library, Route.Downloaded) }.padding(8.dp), align = TextAlign.Center)
         }
         item { Spacer(Modifier.height(24.dp)) }
@@ -264,7 +266,7 @@ fun PlaylistRow(state: AppState, server: MusicServer, lists: List<Playlist>) {
             Column(Modifier.width(160.dp).clickable(role = Role.Button) { state.open(Route.PlaylistPage(p.id, p.name, web = server.kind == ServerKind.Web)) }) {
                 Cover(server.cover(p.coverId, 320), Modifier.size(160.dp), 8.dp)
                 Label(p.name, 15f, 500, modifier = Modifier.padding(top = 6.dp), lines = 2)
-                if (p.trackCount > 0) Label("${p.trackCount} Titel", 13f, color = Ink.secondary)
+                if (p.trackCount > 0) Label(tr("{trackCount} Titel", "trackCount" to p.trackCount), 13f, color = Ink.secondary)
             }
         }
     }
@@ -279,17 +281,17 @@ fun LibraryScreen(state: AppState, server: MusicServer) {
     var hidden by remember { mutableStateOf(prefs.getStringSet("mediathekAus", emptySet()).orEmpty()) }
     var editing by remember { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
-        largeTitle("Mediathek", trailing = {
-            Label(if (editing) "Fertig" else "Bearbeiten", 17f, if (editing) 600 else 400, ink.tint,
+        largeTitle(tr("Mediathek"), trailing = {
+            Label(if (editing) tr("Fertig") else tr("Bearbeiten"), 17f, if (editing) 600 else 400, ink.tint,
                 Modifier.padding(end = 12.dp).clickable(role = Role.Button) { editing = !editing })
-            Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = "Server") { state.open(Route.Servers) }
-                .semantics { contentDescription = "Server" }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Server, ink.tint, 24.dp) }
+            Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = tr("Server")) { state.open(Route.Servers) }
+                .semantics { contentDescription = tr("Server") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Server, ink.tint, 24.dp) }
         })
         // iOS 26: what is pinned stands above everything (long press on an album or a playlist → Anheften).
         item { PinnedGrid(state, server) }
-        val entries = listOf(Triple(Symbol.Playlists, "Playlists", Route.Playlists), Triple(Symbol.Artists, "Interpreten", Route.Artists),
-            Triple(Symbol.Albums, "Alben", Route.Albums), Triple(Symbol.Note, "Titel", Route.Tracks), Triple(Symbol.Star, "Lieblingstitel", Route.Favorites), Triple(Symbol.Downloaded, "Geladen", Route.Downloaded)) +
-            (if (Variant.PRIVATE) listOf(Triple(Symbol.Globe, "Aus dem Netz", Route.Web)) else emptyList())
+        val entries = listOf(Triple(Symbol.Playlists, tr("Playlists"), Route.Playlists), Triple(Symbol.Artists, tr("Interpreten"), Route.Artists),
+            Triple(Symbol.Albums, tr("Alben"), Route.Albums), Triple(Symbol.Note, tr("Titel"), Route.Tracks), Triple(Symbol.Star, tr("Lieblingstitel"), Route.Favorites), Triple(Symbol.Downloaded, tr("Geladen"), Route.Downloaded)) +
+            (if (Variant.PRIVATE) listOf(Triple(Symbol.Globe, tr("Aus dem Netz"), Route.Web)) else emptyList())
         items(if (editing) entries else entries.filter { it.second !in hidden }) { (symbol, label, route) ->
             if (editing) ListRow(label, height = 48.dp,
                 leading = { Box(Modifier.width(28.dp), contentAlignment = Alignment.Center) { SymbolIcon(symbol, ink.tint, 24.dp) } },
@@ -298,7 +300,7 @@ fun LibraryScreen(state: AppState, server: MusicServer) {
                 leading = { Box(Modifier.width(28.dp), contentAlignment = Alignment.Center) { SymbolIcon(symbol, ink.tint, 24.dp) } },
                 trailing = { Chevron() }, titleColor = ink.label)
         }
-        item { SectionHeader("Zuletzt hinzugefügt") }
+        item { SectionHeader(tr("Zuletzt hinzugefügt")) }
         loading(newest, retry) { albumGrid(state, server, it) }
         item { Spacer(Modifier.height(24.dp)) }
     }
@@ -310,7 +312,7 @@ fun ArtistsScreen(state: AppState, server: MusicServer) {
     Column(Modifier.fillMaxSize()) {
         NavBar(state)
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
-            largeTitle("Interpreten", topInset = false)
+            largeTitle(tr("Interpreten"), topInset = false)
             loading(artists, retry) { list ->
                 items(list, key = { it.id }) { artist ->
                     ListRow(artist.name, onClick = { state.open(Route.ArtistPage(artist.id, artist.name, web = server.kind == ServerKind.Web)) }, height = 60.dp,
@@ -336,11 +338,11 @@ fun AlbumsScreen(state: AppState, server: MusicServer) {
     Column(Modifier.fillMaxSize()) {
         // iOS: "Sortieren" in the navigation bar opens a menu with a tick at the chosen order; LiDio remembers it.
         NavBar(state, trailing = {
-            Box(Modifier.clickable(role = Role.Button, onClickLabel = "Sortieren") { sortMenu = true }.semantics { contentDescription = "Sortieren nach ${order.label}" }) {
+            Box(Modifier.clickable(role = Role.Button, onClickLabel = "Sortieren") { sortMenu = true }.semantics { contentDescription = tr("Sortieren nach {label}", "label" to order.label) }) {
                 Label("Sortieren", 17f, color = Ink.tint)
             }
         })
-        if (sortMenu) MenuSheet("Sortieren nach", null, { sortMenu = false }) {
+        if (sortMenu) MenuSheet(tr("Sortieren nach"), null, { sortMenu = false }) {
             val choices = listOf(AlbumOrder.Newest, AlbumOrder.Recent, AlbumOrder.Alphabetical, AlbumOrder.Artist, AlbumOrder.Year)
             choices.forEachIndexed { i, o ->
                 ListRow(o.label, separator = i < choices.lastIndex, onClick = { order = o; prefs.edit().putString("albenSortierung", o.name).apply(); sortMenu = false },
@@ -348,7 +350,7 @@ fun AlbumsScreen(state: AppState, server: MusicServer) {
             }
         }
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = chromePadding()) {
-            largeTitle("Alben", topInset = false)
+            largeTitle(tr("Alben"), topInset = false)
             item { Label(order.label, 13f, color = Ink.secondary, modifier = Modifier.padding(horizontal = 16.dp)) }
             albumGrid(state, server, pages.items)
             pageFooter(pages)
@@ -376,7 +378,7 @@ fun TracksScreen(state: AppState, server: MusicServer) {
     Column(Modifier.fillMaxSize()) {
         NavBar(state)
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = chromePadding()) {
-            largeTitle("Titel", topInset = false)
+            largeTitle(tr("Titel"), topInset = false)
             if (pages.items.isNotEmpty()) item { PlayButtons(state, server, pages.items) }
             itemsIndexed(pages.items, key = { i, t -> "$i-${t.id}" }) { i, track -> TrackRow(state, server, track) { state.playback.play(server, pages.items, i) } }
             pageFooter(pages)
@@ -390,16 +392,16 @@ fun PlaylistsScreen(state: AppState, server: MusicServer) {
     Column(Modifier.fillMaxSize()) {
         NavBar(state)
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
-            largeTitle("Playlists", topInset = false, trailing = {
-                Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = "Playlist importieren") { state.open(Route.Import) }
-                    .semantics { contentDescription = "Playlist importieren" }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Plus, Ink.tint, 24.dp, weight = 2.2f) }
+            largeTitle(tr("Playlists"), topInset = false, trailing = {
+                Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = tr("Playlist importieren")) { state.open(Route.Import) }
+                    .semantics { contentDescription = tr("Playlist importieren") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Plus, Ink.tint, 24.dp, weight = 2.2f) }
             })
             loading(lists, retry) { list ->
-                if (list.isEmpty()) item { Label("Noch keine Playlists auf diesem Server.", 15f, color = Ink.secondary, modifier = Modifier.padding(16.dp)) }
+                if (list.isEmpty()) item { Label(tr("Noch keine Playlists auf diesem Server."), 15f, color = Ink.secondary, modifier = Modifier.padding(16.dp)) }
                 items(list, key = { it.id }) { playlist ->
                     var menu by remember { mutableStateOf(false) }
                     if (menu) CollectionMenu(state, server, Pin("playlist", playlist.id, playlist.name, playlist.coverId, server.kind == ServerKind.Web), null) { menu = false }
-                    ListRow(playlist.name, playlist.trackCount.takeIf { it > 0 }?.let { "$it Titel" }, onClick = { state.open(Route.PlaylistPage(playlist.id, playlist.name, web = server.kind == ServerKind.Web)) },
+                    ListRow(playlist.name, playlist.trackCount.takeIf { it > 0 }?.let { tr("{it} Titel", "it" to it) }, onClick = { state.open(Route.PlaylistPage(playlist.id, playlist.name, web = server.kind == ServerKind.Web)) },
                         onLongClick = { menu = true }, height = 68.dp,
                         leading = { Cover(server.cover(playlist.coverId, 160), Modifier.size(56.dp), 6.dp) }, trailing = { Chevron() })
                 }
@@ -411,8 +413,8 @@ fun PlaylistsScreen(state: AppState, server: MusicServer) {
 @Composable
 fun PlayButtons(state: AppState, server: MusicServer, tracks: List<Track>) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Capsule(Symbol.Play, "Wiedergabe", Modifier.weight(1f)) { if (tracks.isNotEmpty()) state.playback.play(server, tracks) }
-        Capsule(Symbol.Shuffle, "Zufall", Modifier.weight(1f)) { if (tracks.isNotEmpty()) state.playback.play(server, tracks, shuffled = true) }
+        Capsule(Symbol.Play, tr("Wiedergabe"), Modifier.weight(1f)) { if (tracks.isNotEmpty()) state.playback.play(server, tracks) }
+        Capsule(Symbol.Shuffle, tr("Zufall"), Modifier.weight(1f)) { if (tracks.isNotEmpty()) state.playback.play(server, tracks, shuffled = true) }
     }
 }
 
@@ -451,7 +453,7 @@ fun AlbumScreen(state: AppState, server: MusicServer, route: Route.AlbumPage) {
                 }
                 item {
                     Column(Modifier.padding(16.dp)) {
-                        album.year?.let { Label("Erschienen $it", 13f, color = ink.secondary) }
+                        album.year?.let { Label(tr("Erschienen {it}", "it" to it), 13f, color = ink.secondary) }
                         Label(summary(tracks.size, tracks.sumOf { it.duration }), 13f, color = ink.secondary)
                     }
                 }
@@ -468,7 +470,7 @@ fun ArtistScreen(state: AppState, server: MusicServer, route: Route.ArtistPage) 
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
             largeTitle(route.name, topInset = false)
             loading(load, retry) { (_, albums) ->
-                item { SectionHeader("Alben") }
+                item { SectionHeader(tr("Alben")) }
                 albumGrid(state, server, albums)
             }
         }
@@ -489,7 +491,7 @@ fun PlaylistScreen(state: AppState, server: MusicServer, route: Route.PlaylistPa
         NavBar(state, trailing = load.value?.takeIf { server.kind != ServerKind.Local }?.let { {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (server.kind == ServerKind.Emby || server.kind == ServerKind.Jellyfin || server.kind == ServerKind.Navidrome)
-                    Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) { sharing = true }.semantics { contentDescription = "Freigeben" },
+                    Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) { sharing = true }.semantics { contentDescription = tr("Freigeben") },
                         contentAlignment = Alignment.Center) { SymbolIcon(Symbol.People, Ink.tint, 24.dp) }
                 if (server.kind == ServerKind.Web) WebListButton(it.second.map { t -> t.asHit(server) }) else DownloadButton(state, server, it.second)
             } } })
@@ -552,7 +554,7 @@ fun SearchScreen(state: AppState, server: MusicServer) {
         if (!playlistSource || asked.isEmpty()) emptyList() else when (source) {
             WebSource.Deezer -> DeezerPlaylists().search(asked)
             else -> state.playback.settings.publicSources().firstOrNull { it.source == Source.Spotify }?.search(asked)
-                ?: throw ServerError("Die Spotify-Suche braucht eine eigene, kostenlose Spotify-App (Client-ID) unter Mediathek → Server. Links gehen auch ohne: einfügen oder aus Spotify teilen.")
+                ?: throw ServerError(tr("Die Spotify-Suche braucht eine eigene, kostenlose Spotify-App (Client-ID) unter Mediathek → Server. Links gehen auch ohne: einfügen oder aus Spotify teilen."))
         }
     }
     // A Deezer or Spotify playlist link (pasted, or shared from their apps): open it right away.
@@ -588,21 +590,21 @@ fun SearchScreen(state: AppState, server: MusicServer) {
     val genreServer = if (web) webServer ?: server else server
     val (genres, _) = rememberCachedLoad("${state.account?.id}:${genreServer.kind}:genres", genreServer) { genreServer.genres() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
-        largeTitle("Suchen")
+        largeTitle(tr("Suchen"))
         item {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ink.fill.copy(alpha = if (ink.dark) 0.5f else 0.25f))
                 .padding(horizontal = 8.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                 SymbolIcon(Symbol.Search, ink.secondary, 18.dp)
                 Box(Modifier.weight(1f).padding(start = 6.dp)) {
-                    if (query.isEmpty()) Label(if (web) "Titel, Interpreten oder Link" else "Interpreten, Alben, Titel, Playlists", 17f, color = ink.secondary)
+                    if (query.isEmpty()) Label(if (web) tr("Titel, Interpreten oder Link") else tr("Interpreten, Alben, Titel, Playlists"), 17f, color = ink.secondary)
                     BasicTextField(query, { query = it }, singleLine = true, textStyle = style(17f, color = ink.label), cursorBrush = SolidColor(ink.tint),
                         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Suchbegriff" })
                 }
-                if (query.isNotEmpty()) Box(Modifier.clickable(role = Role.Button, onClickLabel = "Löschen") { query = "" }) { SymbolIcon(Symbol.Close, ink.secondary, 16.dp) }
+                if (query.isNotEmpty()) Box(Modifier.clickable(role = Role.Button, onClickLabel = tr("Löschen")) { query = "" }) { SymbolIcon(Symbol.Close, ink.secondary, 16.dp) }
             }
         }
         if (engine != null && !onlyWeb) item {
-            Segmented(listOf("Deine Mediathek", "Im Netz"), if (web) 1 else 0, Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) { state.searchWeb = it == 1 }
+            Segmented(listOf(tr("Deine Mediathek"), tr("Im Netz")), if (web) 1 else 0, Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) { state.searchWeb = it == 1 }
         }
         if (!isLink(asked) && (web || asked.isNotEmpty())) item {
             ScopeBar(scope, if (asked.isEmpty() || (web && !musicSearch)) listOf(SearchScope.Top) else SearchScope.entries, if (web) source else null,
@@ -612,10 +614,10 @@ fun SearchScreen(state: AppState, server: MusicServer) {
             onClear = { recent = emptyList(); recentPrefs.edit().remove("zuletzt").apply() })
         else if (playlistSource) {
             if (asked.isNotEmpty()) loading(found, foundRetry) { lists ->
-                if (lists.isEmpty()) item { Label("Bei ${source.label} keine Playlist zu „$asked“.", 17f, color = ink.secondary, modifier = Modifier.padding(16.dp)) }
-                else item { SectionHeader("Playlists") }
+                if (lists.isEmpty()) item { Label(tr("Bei {label} keine Playlist zu „{asked}“.", "label" to source.label, "asked" to asked), 17f, color = ink.secondary, modifier = Modifier.padding(16.dp)) }
+                else item { SectionHeader(tr("Playlists")) }
                 items(lists, key = { "r" + it.source + it.id }) { p ->
-                    ListRow(p.name, listOfNotNull(p.owner.takeIf { it.isNotEmpty() }, if (p.count > 0) "${p.count} Titel" else null).joinToString(" · "),
+                    ListRow(p.name, listOfNotNull(p.owner.takeIf { it.isNotEmpty() }, if (p.count > 0) tr("{count} Titel", "count" to p.count) else null).joinToString(" · "),
                         onClick = { state.open(Route.RemotePage(p)) }, height = 68.dp,
                         leading = { Cover(p.cover, Modifier.size(56.dp), 6.dp) }, trailing = { Chevron() })
                 }
@@ -626,16 +628,16 @@ fun SearchScreen(state: AppState, server: MusicServer) {
             val playlists = lists.value.orEmpty()
             val top = scope == SearchScope.Top
             if (found.artists.isEmpty() && found.albums.isEmpty() && found.tracks.isEmpty() && playlists.isEmpty() && !lists.loading)
-                item { Label(if (everywhere) "Nirgends etwas zu „$asked“." else if (web) "Bei ${Variant.MUSIC} nichts zu „$asked“." else "Auf deinem Server nichts zu „$asked“.", 17f, color = ink.secondary, modifier = Modifier.padding(16.dp)) }
+                item { Label(if (everywhere) tr("Nirgends etwas zu „{asked}“.", "asked" to asked) else if (web) tr("Bei {MUSIC} nichts zu „{asked}“.", "MUSIC" to Variant.MUSIC, "asked" to asked) else tr("Auf deinem Server nichts zu „{asked}“.", "asked" to asked), 17f, color = ink.secondary, modifier = Modifier.padding(16.dp)) }
             val tracks = if (top) found.tracks.take(6) else found.tracks
             if ((top || scope == SearchScope.Titel) && tracks.isNotEmpty()) {
-                item { SectionHeader("Titel", if (top && found.tracks.size > 6) "Alle anzeigen" else null) { scope = SearchScope.Titel } }
+                item { SectionHeader(tr("Titel"), if (top && found.tracks.size > 6) tr("Alle anzeigen") else null) { scope = SearchScope.Titel } }
                 itemsIndexed(tracks, key = { _, t -> "t" + t.id }) { i, track -> TrackRow(state, searchServer, track, subtitle = if (everywhere) "${track.artist} · ${Variant.MUSIC}" else track.artist) { state.playback.play(searchServer, tracks, i) } }
             }
             more.value?.let { (yt, sc, _) ->
                 val others = (if (top) yt.take(3) + sc.take(3) else yt + sc).map { it to it.asTrack() }
                 if ((top || scope == SearchScope.Titel) && others.isNotEmpty()) {
-                    if (tracks.isEmpty()) item { SectionHeader("Titel") }
+                    if (tracks.isEmpty()) item { SectionHeader(tr("Titel")) }
                     items(others, key = { "o" + it.second.id }) { (hit, t) ->
                         TrackRow(state, searchServer, t, subtitle = "${t.artist} · ${hit.source.label}") { state.playback.play(searchServer, others.map { it.second }, others.indexOfFirst { it.second.id == t.id }) }
                     }
@@ -643,7 +645,7 @@ fun SearchScreen(state: AppState, server: MusicServer) {
             }
             val albums = if (top) found.albums.take(4) else found.albums
             if ((top || scope == SearchScope.Alben) && albums.isNotEmpty()) {
-                item { SectionHeader("Alben", if (top && found.albums.size > 4) "Alle anzeigen" else null) { scope = SearchScope.Alben } }
+                item { SectionHeader(tr("Alben"), if (top && found.albums.size > 4) tr("Alle anzeigen") else null) { scope = SearchScope.Alben } }
                 items(albums, key = { "b" + it.id }) { album ->
                     ListRow(album.title, listOfNotNull(album.artist.ifEmpty { null }, album.year?.toString()).joinToString(" · "),
                         onClick = { state.open(Route.AlbumPage(album.id, web = searchServer.kind == ServerKind.Web)) }, height = 68.dp,
@@ -654,16 +656,16 @@ fun SearchScreen(state: AppState, server: MusicServer) {
             if (top || scope == SearchScope.Playlists) {
                 if (web) {
                     val shown = if (top) playlists.take(4) else playlists
-                    if (shown.isNotEmpty()) item { SectionHeader("Playlists", if (top && playlists.size > 4) "Alle anzeigen" else null) { scope = SearchScope.Playlists } }
+                    if (shown.isNotEmpty()) item { SectionHeader(tr("Playlists"), if (top && playlists.size > 4) tr("Alle anzeigen") else null) { scope = SearchScope.Playlists } }
                     items(shown, key = { "p" + it.id }) { p ->
-                        ListRow(p.name, listOfNotNull(if (p.trackCount > 0) "${p.trackCount} Titel" else "Playlist", if (everywhere) Variant.MUSIC else null).joinToString(" · "),
+                        ListRow(p.name, listOfNotNull(if (p.trackCount > 0) tr("{trackCount} Titel", "trackCount" to p.trackCount) else "Playlist", if (everywhere) Variant.MUSIC else null).joinToString(" · "),
                             onClick = { state.open(Route.PlaylistPage(p.id, p.name, web = true)) },
                             height = 68.dp, leading = { Cover(searchServer.cover(p.coverId, 160), Modifier.size(56.dp), 6.dp) }, trailing = { Chevron() })
                     }
                     val remoteLists = more.value?.third.orEmpty().let { if (top) it.take(4) else it }
-                    if (remoteLists.isNotEmpty() && shown.isEmpty()) item { SectionHeader("Playlists") }
+                    if (remoteLists.isNotEmpty() && shown.isEmpty()) item { SectionHeader(tr("Playlists")) }
                     items(remoteLists, key = { "r" + it.source + it.id }) { p ->
-                        ListRow(p.name, listOfNotNull(p.owner.takeIf { it.isNotEmpty() }, if (p.count > 0) "${p.count} Titel" else null, p.source.label).joinToString(" · "),
+                        ListRow(p.name, listOfNotNull(p.owner.takeIf { it.isNotEmpty() }, if (p.count > 0) tr("{count} Titel", "count" to p.count) else null, p.source.label).joinToString(" · "),
                             onClick = { state.open(Route.RemotePage(p)) }, height = 68.dp, leading = { Cover(p.cover, Modifier.size(56.dp), 6.dp) }, trailing = { Chevron() })
                     }
                 } else publicPlaylists(state, server, asked, if (top) playlists.take(4) else playlists, if (sourcesOn > 0) remote else null) {
@@ -672,7 +674,7 @@ fun SearchScreen(state: AppState, server: MusicServer) {
             }
             val artists = if (top) found.artists.take(3) else found.artists
             if ((top || scope == SearchScope.Interpreten) && artists.isNotEmpty()) {
-                item { SectionHeader("Interpreten", if (top && found.artists.size > 3) "Alle anzeigen" else null) { scope = SearchScope.Interpreten } }
+                item { SectionHeader(tr("Interpreten"), if (top && found.artists.size > 3) tr("Alle anzeigen") else null) { scope = SearchScope.Interpreten } }
                 items(artists, key = { "a" + it.id }) { artist ->
                     ListRow(artist.name, onClick = { state.open(Route.ArtistPage(artist.id, artist.name, web = searchServer.kind == ServerKind.Web)) }, height = 60.dp,
                         leading = { Cover(searchServer.cover(artist.coverId, 120), Modifier.size(48.dp), 24.dp) }, trailing = { Chevron() })
@@ -684,7 +686,7 @@ fun SearchScreen(state: AppState, server: MusicServer) {
 }
 
 /** The scopes of a search, as in Music on iOS. */
-enum class SearchScope(val label: String) { Top("Top-Treffer"), Titel("Titel"), Alben("Alben"), Playlists("Playlists"), Interpreten("Interpreten") }
+enum class SearchScope(val label: String) { Top("Top-Treffer"), Titel(tr("Titel")), Alben(tr("Alben")), Playlists(tr("Playlists")), Interpreten(tr("Interpreten")) }
 
 /** The bar below the search field: in "Im Netz" first the source as a pull-down button (HIG), then the scopes as capsules. */
 @Composable
@@ -695,7 +697,7 @@ private fun ScopeBar(scope: SearchScope, scopes: List<SearchScope>, source: WebS
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (source != null) Box {
             Row(Modifier.clip(RoundedCornerShape(16.dp)).background(ink.fill.copy(alpha = if (ink.dark) 0.5f else 0.25f))
-                .clickable(role = Role.DropdownList, onClickLabel = "Quelle wählen") { menu = true }.padding(horizontal = 12.dp, vertical = 6.dp),
+                .clickable(role = Role.DropdownList, onClickLabel = tr("Quelle wählen")) { menu = true }.padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(7.dp).clip(CircleShape).background(source.color))
                 Label(source.label, 15f, 600, modifier = Modifier.padding(start = 6.dp, end = 4.dp))
@@ -731,12 +733,12 @@ fun ServersScreen(state: AppState) {
     Column(Modifier.fillMaxSize()) {
         NavBar(state)
         LazyColumn(Modifier.fillMaxSize().background(ink.grouped), contentPadding = chromePadding()) {
-            largeTitle("Server", topInset = false)
-            item { Label("VERBUNDEN", 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, top = 16.dp, bottom = 6.dp)) }
+            largeTitle(tr("Server"), topInset = false)
+            item { Label(tr("VERBUNDEN"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, top = 16.dp, bottom = 6.dp)) }
             item {
                 Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
                     all.forEachIndexed { i, account ->
-                        ListRow(account.name.ifEmpty { account.address }, if (account.kind == ServerKind.Local) "${LocalLibrary.decode(account.address).size} Ordner"
+                        ListRow(account.name.ifEmpty { account.address }, if (account.kind == ServerKind.Local) tr("{count} Ordner", "count" to (LocalLibrary.decode(account.address).size))
                             else "${account.kind.label} · ${account.user}", height = 60.dp,
                             separator = i < all.lastIndex, onClick = { state.use(account) },
                             leading = { SymbolIcon(Symbol.Server, ink.tint, 24.dp) },
@@ -747,16 +749,16 @@ fun ServersScreen(state: AppState) {
             state.account?.takeIf { it.kind != ServerKind.Local }?.let { account -> item { AddressSettings(state, account) } }
             item {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 20.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
-                    ListRow("Server hinzufügen", onClick = { state.adding = true }, titleColor = ink.tint, separator = true)
-                    ListRow("Ordner auf diesem Gerät hinzufügen", onClick = { state.pickFolder() }, titleColor = ink.tint, separator = true)
+                    ListRow(tr("Server hinzufügen"), onClick = { state.adding = true }, titleColor = ink.tint, separator = true)
+                    ListRow(tr("Ordner auf diesem Gerät hinzufügen"), onClick = { state.pickFolder() }, titleColor = ink.tint, separator = true)
                     if (state.account?.kind == ServerKind.Local) {
                         val scope = androidx.compose.runtime.rememberCoroutineScope()
                         val context = androidx.compose.ui.platform.LocalContext.current
-                        ListRow("Ordner neu durchsuchen", onClick = { state.account?.let { a -> scope.launch { scanLocal(state, a) } } }, titleColor = ink.tint, separator = true)
+                        ListRow(tr("Ordner neu durchsuchen"), onClick = { state.account?.let { a -> scope.launch { scanLocal(state, a) } } }, titleColor = ink.tint, separator = true)
                         LocalLibrary.decode(state.account?.address ?: "").forEach { folder ->
-                            val name = android.net.Uri.decode(folder.lastPathSegment ?: "").substringAfterLast(':').ifEmpty { "Ordner" }
-                            ListRow(name, "Ordner auf diesem Gerät", height = 56.dp, trailing = {
-                                Label("Entfernen", 15f, 400, Red, Modifier.clickable(role = Role.Button) {
+                            val name = android.net.Uri.decode(folder.lastPathSegment ?: "").substringAfterLast(':').ifEmpty { tr("Ordner") }
+                            ListRow(name, tr("Ordner auf diesem Gerät"), height = 56.dp, trailing = {
+                                Label(tr("Entfernen"), 15f, 400, Red, Modifier.clickable(role = Role.Button) {
                                     // Give the grant back to Android, then read what's left (or drop the source when nothing is).
                                     runCatching { context.contentResolver.releasePersistableUriPermission(folder, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
                                     val account = state.account ?: return@clickable
@@ -768,7 +770,7 @@ fun ServersScreen(state: AppState) {
                             })
                         }
                     }
-                    ListRow("Diesen Server abmelden", onClick = {
+                    ListRow(tr("Diesen Server abmelden"), onClick = {
                         state.account?.let { state.accounts.remove(it.id) }
                         state.playback.controller?.stop()
                         all = state.accounts.all(); state.account = state.accounts.active(); state.stacks.clear(); state.generation++
@@ -781,45 +783,53 @@ fun ServersScreen(state: AppState) {
                 Label("AUDIOQUALITÄT (KBIT/S)", 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, bottom = 6.dp))
                 Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card).padding(vertical = 6.dp)) {
                     for ((label, value, set) in listOf(Triple("WLAN", wifi, { v: Int -> wifi = v; state.playback.settings.wifiBitrate = v }),
-                        Triple("Mobile Daten", mobile, { v: Int -> mobile = v; state.playback.settings.mobileBitrate = v }))) {
+                        Triple(tr("Mobile Daten"), mobile, { v: Int -> mobile = v; state.playback.settings.mobileBitrate = v }))) {
                         Label(label, 15f, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
                         Segmented(Settings.BITRATES.map(Settings::label), Settings.BITRATES.indexOf(value).coerceAtLeast(0),
                             Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) { set(Settings.BITRATES[it]) }
                     }
                 }
-                Label("„Original“ spielt die Datei, wie sie auf dem Server liegt. Kleinere Werte lässt der Server umrechnen – das spart Datenvolumen.",
+                Label(tr("„Original“ spielt die Datei, wie sie auf dem Server liegt. Kleinere Werte lässt der Server umrechnen – das spart Datenvolumen."),
                     13f, color = ink.secondary, lines = 4, modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp, bottom = 20.dp))
             }
             item {
                 var hide by remember { mutableStateOf(state.playback.settings.hideDuplicates) }
-                Label("MEDIATHEK", 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, bottom = 6.dp))
+                Label(tr("MEDIATHEK"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, bottom = 6.dp))
                 Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
-                    ListRow("Duplikate ausblenden", "Gleicher Titel vom gleichen Interpreten nur einmal", height = 60.dp,
-                        trailing = { IosSwitch(hide, "Duplikate ausblenden") { hide = it; state.playback.settings.hideDuplicates = it; state.generation++ } })
+                    ListRow(tr("Duplikate ausblenden"), tr("Gleicher Titel vom gleichen Interpreten nur einmal"), height = 60.dp,
+                        trailing = { IosSwitch(hide, tr("Duplikate ausblenden")) { hide = it; state.playback.settings.hideDuplicates = it; state.generation++ } })
                     // Card 7ac89c11: lyrics from LRCLIB when the server has none.
                     var lyricsOnline by remember { mutableStateOf(state.playback.settings.lyricsOnline) }
-                    ListRow("Liedtexte aus dem Netz", "Fehlt der Text auf dem Server, fragt LiDio LRCLIB", height = 60.dp, separator = false,
-                        trailing = { IosSwitch(lyricsOnline, "Liedtexte aus dem Netz") { lyricsOnline = it; state.playback.settings.lyricsOnline = it } })
+                    ListRow(tr("Liedtexte aus dem Netz"), tr("Fehlt der Text auf dem Server, fragt LiDio LRCLIB"), height = 60.dp, separator = false,
+                        trailing = { IosSwitch(lyricsOnline, tr("Liedtexte aus dem Netz")) { lyricsOnline = it; state.playback.settings.lyricsOnline = it } })
                 }
-                Label("Für Liedtexte gehen Titel und Interpret an lrclib.net – frei, ohne Konto und Werbung.", 13f, color = ink.secondary, lines = 2,
+                Label(tr("Für Liedtexte gehen Titel und Interpret an lrclib.net – frei, ohne Konto und Werbung."), 13f, color = ink.secondary, lines = 2,
                     modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp))
                 Spacer(Modifier.height(20.dp))
             }
             item {
-                Label("HILFE", 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, bottom = 6.dp))
+                Label(tr("HILFE"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, bottom = 6.dp))
                 Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
-                    ListRow("Anleitung", "Rundgang, Kapitel, PDF, Datenschutz", height = 60.dp, separator = false, onClick = { state.open(Route.Guide) }, trailing = { Chevron() })
+                    ListRow(tr("Anleitung"), tr("Rundgang, Kapitel, PDF, Datenschutz"), height = 60.dp, separator = false, onClick = { state.open(Route.Guide) }, trailing = { Chevron() })
                 }
                 Spacer(Modifier.height(20.dp))
             }
             item {
                 val w = state.winamp
-                Label("DARSTELLUNG", 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, bottom = 6.dp))
+                Label(tr("DARSTELLUNG"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, bottom = 6.dp))
                 Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
                     // Card d894cc42: "Klassisch" or "Modern" (iOS 26) – independent of the Winamp view.
-                    Label("Erscheinungsbild", 15f, modifier = Modifier.padding(start = 16.dp, top = 10.dp))
-                    Segmented(listOf("Klassisch", "Modern"), if (state.modern) 1 else 0, Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Label(tr("Erscheinungsbild"), 15f, modifier = Modifier.padding(start = 16.dp, top = 10.dp))
+                    Segmented(listOf(tr("Klassisch"), tr("Modern")), if (state.modern) 1 else 0, Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                         state.modern = it == 1; state.playback.settings.modern = it == 1
+                    }
+                    Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(0.5.dp).background(ink.separator))
+                    // Language: like the system or chosen here – takes effect at the next start.
+                    Label(tr("Sprache"), 15f, modifier = Modifier.padding(start = 16.dp, top = 10.dp))
+                    val i18n = io.github.veritasx1.lidio.i18n.I18n
+                    val codes = listOf<String?>(null) + i18n.LANGUAGES.keys
+                    Segmented(listOf(tr("System")) + i18n.LANGUAGES.values, codes.indexOf(i18n.chosen).coerceAtLeast(0), Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        i18n.chosen = codes[it]; state.notice = tr("Die Sprache wechselt beim nächsten Start von LiDio.")
                     }
                     Box(Modifier.padding(start = 16.dp).fillMaxWidth().height(0.5.dp).background(ink.separator))
                     val context = androidx.compose.ui.platform.LocalContext.current
@@ -827,20 +837,20 @@ fun ServersScreen(state: AppState) {
                     LaunchedEffect(Unit) { while (true) { allowed = LockScreen.allowed(context); kotlinx.coroutines.delay(1000) } }
                     fun permission() = runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         android.net.Uri.parse("package:" + context.packageName))) }
-                    ListRow("Winamp auf dem Sperrbildschirm", if (w.lockScreen && !allowed) "Erlaubnis fehlt – hier antippen" else "Wenn Musik läuft und Winamp offen war",
+                    ListRow(tr("Winamp auf dem Sperrbildschirm"), if (w.lockScreen && !allowed) tr("Erlaubnis fehlt – hier antippen") else tr("Wenn Musik läuft und Winamp offen war"),
                         height = 60.dp, titleColor = ink.label, onClick = if (w.lockScreen && !allowed) ({ permission() }) else null,
-                        trailing = { IosSwitch(w.lockScreen, "Winamp auf dem Sperrbildschirm") { on ->
+                        trailing = { IosSwitch(w.lockScreen, tr("Winamp auf dem Sperrbildschirm")) { on ->
                             w.lockScreen = on; w.save(); if (on && !LockScreen.allowed(context)) permission() } })
-                    ListRow("Winamp-Skin", height = 48.dp, separator = false, onClick = { state.open(Route.Skins) }, trailing = {
+                    ListRow(tr("Winamp-Skin"), height = 48.dp, separator = false, onClick = { state.open(Route.Skins) }, trailing = {
                         Label(SkinLibrary.nameOf(state.accounts.context, w.skin), 17f, color = ink.secondary, modifier = Modifier.padding(end = 6.dp)); Chevron() })
                 }
-                Label("„Modern“ sieht aus wie Musik unter iOS 26: Glas, schwebende Leiste, Suche als eigener Knopf. " +
-                    "Der Blitz unten in „Jetzt läuft“ wechselt in die Winamp-Ansicht, der Blitz im Winamp-Fenster wieder zurück. LiDio merkt sich, welche Ansicht du zuletzt hattest.",
+                Label(tr("„Modern“ sieht aus wie Musik unter iOS 26: Glas, schwebende Leiste, Suche als eigener Knopf. ") +
+                    tr("Der Blitz unten in „Jetzt läuft“ wechselt in die Winamp-Ansicht, der Blitz im Winamp-Fenster wieder zurück. LiDio merkt sich, welche Ansicht du zuletzt hattest."),
                     13f, color = ink.secondary, lines = 3, modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp, bottom = 20.dp))
             }
             item { OfflineSettings(state) }
             item { PublicSettings(state) }
-            item { Label("LiDio spricht nur mit den Servern, die du hier einträgst. Passwörter bleiben verschlüsselt auf diesem Gerät.",
+            item { Label(tr("LiDio spricht nur mit den Servern, die du hier einträgst. Passwörter bleiben verschlüsselt auf diesem Gerät."),
                 13f, color = ink.secondary, lines = 4, modifier = Modifier.padding(horizontal = 32.dp)) }
         }
     }
@@ -858,9 +868,9 @@ fun AddressSettings(state: AppState, account: Account) {
         val next = account.copy(address = clean(home).ifEmpty { account.address }, external = clean(away))
         if (next != account) { state.accounts.save(next); state.account = next; scope.launch { state.resolve() } }
     }
-    Label("ADRESSEN", 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, top = 20.dp, bottom = 6.dp))
+    Label(tr("ADRESSEN"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, top = 20.dp, bottom = 6.dp))
     Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
-        for ((label, value, set) in listOf(Triple("Im WLAN", home, { v: String -> home = v }), Triple("Unterwegs", away, { v: String -> away = v }))) {
+        for ((label, value, set) in listOf(Triple(tr("Im WLAN"), home, { v: String -> home = v }), Triple("Unterwegs", away, { v: String -> away = v }))) {
             Row(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Label(label, 15f, modifier = Modifier.width(96.dp))
                 Box(Modifier.weight(1f)) {
@@ -869,15 +879,15 @@ fun AddressSettings(state: AppState, account: Account) {
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { save() }),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done,
                             keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri),
-                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Adresse $label" }
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = tr("Adresse {label}", "label" to label) }
                             .onFocusChanged { if (!it.isFocused) save() })
                 }
                 if (Reach.normal(state.address) == Reach.normal(value) && value.isNotEmpty())
-                    Label("in Benutzung", 13f, 600, Green, Modifier.padding(start = 8.dp))
+                    Label(tr("in Benutzung"), 13f, 600, Green, Modifier.padding(start = 8.dp))
             }
         }
     }
-    Label("Im WLAN nimmt LiDio die schnelle Adresse, sonst die für unterwegs – beim Start und bei jedem Netzwechsel, auch während der Wiedergabe.",
+    Label(tr("Im WLAN nimmt LiDio die schnelle Adresse, sonst die für unterwegs – beim Start und bei jedem Netzwechsel, auch während der Wiedergabe."),
         13f, color = ink.secondary, lines = 3, modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp))
 }
 
@@ -890,11 +900,11 @@ fun FavoritesScreen(state: AppState, server: MusicServer) {
     Column(Modifier.fillMaxSize()) {
         NavBar(state)
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
-            largeTitle("Lieblingstitel", topInset = false)
+            largeTitle(tr("Lieblingstitel"), topInset = false)
             loading(load, retry) { all ->
                 val tracks = all.filter { state.playback.isFavorite(it) }
                 if (tracks.isEmpty()) item {
-                    Label("Noch keine Lieblingstitel. Tippe in „Jetzt läuft“ auf ★ oder halte einen Titel gedrückt → Favorit.", 15f,
+                    Label(tr("Noch keine Lieblingstitel. Tippe in „Jetzt läuft“ auf ★ oder halte einen Titel gedrückt → Favorit."), 15f,
                         color = Ink.secondary, lines = 3, modifier = Modifier.padding(16.dp))
                 } else item { PlayButtons(state, server, tracks) }
                 itemsIndexed(tracks, key = { _, t -> "f" + t.id }) { i, t -> TrackRow(state, server, t) { state.playback.play(server, tracks, i) } }
@@ -912,8 +922,8 @@ fun GenreScreen(state: AppState, server: MusicServer, genre: Genre) {
         NavBar(state)
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
             largeTitle(genre.name, topInset = false)
-            lists.value?.takeIf { it.isNotEmpty() }?.let { item { SectionHeader("Playlists") }; item { PlaylistRow(state, server, it) } }
-            loading(albums, retry) { a -> if (a.isNotEmpty()) { item { SectionHeader("Alben") }; albumGrid(state, server, a) } }
+            lists.value?.takeIf { it.isNotEmpty() }?.let { item { SectionHeader(tr("Playlists")) }; item { PlaylistRow(state, server, it) } }
+            loading(albums, retry) { a -> if (a.isNotEmpty()) { item { SectionHeader(tr("Alben")) }; albumGrid(state, server, a) } }
         }
     }
 }
@@ -921,14 +931,14 @@ fun GenreScreen(state: AppState, server: MusicServer, genre: Genre) {
 /** Search before typing, like Music on iOS: what was searched lately, then genres and moods as coloured tiles. */
 fun LazyListScope.searchStart(state: AppState, server: MusicServer, recent: List<String>, genres: List<Genre>, onRecent: (String) -> Unit, onClear: () -> Unit) {
     if (recent.isNotEmpty()) {
-        item { SectionHeader("Zuletzt gesucht", "Löschen", onClear) }
+        item { SectionHeader(tr("Zuletzt gesucht"), tr("Löschen"), onClear) }
         items(recent, key = { "r$it" }) { q ->
             ListRow(q, onClick = { onRecent(q) }, height = 44.dp, titleColor = Ink.tint,
                 leading = { Box(Modifier.width(24.dp), contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Search, Ink.secondary, 16.dp) } })
         }
     }
     if (genres.isNotEmpty()) {
-        item { SectionHeader("Kategorien entdecken") }
+        item { SectionHeader(tr("Kategorien entdecken")) }
         items(genres.chunked(2)) { row ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { g ->
@@ -977,12 +987,12 @@ fun MixScreen(state: AppState, server: MusicServer, kind: String) {
         }
     }
     Column(Modifier.fillMaxSize()) {
-        NavBar(state, trailing = { Label("Neu mischen", 17f, color = Ink.tint, modifier = Modifier.clickable(role = Role.Button) { round++ }) })
+        NavBar(state, trailing = { Label(tr("Neu mischen"), 17f, color = Ink.tint, modifier = Modifier.clickable(role = Role.Button) { round++ }) })
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
-            largeTitle(if (kind == "favoriten") "Lieblings-Mix" else "Neu entdecken", topInset = false)
+            largeTitle(if (kind == "favoriten") tr("Lieblings-Mix") else tr("Neu entdecken"), topInset = false)
             loading(load, retry) { tracks ->
                 if (tracks.isEmpty()) item {
-                    Label(if (kind == "favoriten") "Markiere Titel mit ★ – daraus entsteht dein Mix." else "Hier ist gerade nichts Ungehörtes.", 15f,
+                    Label(if (kind == "favoriten") tr("Markiere Titel mit ★ – daraus entsteht dein Mix.") else tr("Hier ist gerade nichts Ungehörtes."), 15f,
                         color = Ink.secondary, lines = 3, modifier = Modifier.padding(16.dp))
                 } else item { PlayButtons(state, server, tracks) }
                 itemsIndexed(tracks, key = { _, t -> "x" + t.id }) { i, t -> TrackRow(state, server, t) { state.playback.play(server, tracks, i) } }

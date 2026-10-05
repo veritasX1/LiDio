@@ -3,6 +3,7 @@ The same few things for all three, like the Android app's MusicServer, so the wi
 Every call blocks – the window runs them in a thread."""
 import base64, hashlib, json, random, string, urllib.parse, urllib.request, uuid
 from dataclasses import dataclass, field
+from .i18n import _
 
 CLIENT, VERSION = "LiDio", "0.1"
 
@@ -120,10 +121,10 @@ def _request(url, headers=None, data=None, method=None, timeout=20):
             return json.loads(raw) if raw[:1] in (b"{", b"[") else raw
     except urllib.error.HTTPError as e:
         if e.code in (401, 403):
-            raise ServerError("Anmeldung abgelehnt – Benutzername oder Passwort stimmen nicht.") from e
-        raise ServerError(f"Der Server antwortet mit Fehler {e.code}.") from e
+            raise ServerError(_("Anmeldung abgelehnt – Benutzername oder Passwort stimmen nicht.")) from e
+        raise ServerError(_("Der Server antwortet mit Fehler {code}.", code=e.code)) from e
     except (urllib.error.URLError, TimeoutError, OSError) as e:
-        raise ServerError("Der Server ist nicht erreichbar.") from e
+        raise ServerError(_("Der Server ist nicht erreichbar.")) from e
 
 
 def normal(address):
@@ -171,14 +172,14 @@ class MediaBrowser:
     def _track(j):
         artists = j.get("Artists") or []
         cover = j["Id"] if "Primary" in (j.get("ImageTags") or {}) else (j.get("AlbumId") if j.get("AlbumPrimaryImageTag") else None)
-        return Track(j["Id"], j.get("Name") or "Unbekannt", ", ".join(artists) or j.get("AlbumArtist") or "Unbekannt", j.get("Album") or "",
+        return Track(j["Id"], j.get("Name") or _("Unbekannt"), ", ".join(artists) or j.get("AlbumArtist") or _("Unbekannt"), j.get("Album") or "",
                      j.get("AlbumId"), int((j.get("RunTimeTicks") or 0) / 10_000_000), j.get("IndexNumber"), j.get("ParentIndexNumber"),
                      j.get("ProductionYear"), cover, bool((j.get("UserData") or {}).get("IsFavorite")))
 
     @staticmethod
     def _album(j):
         aa = (j.get("AlbumArtists") or [{}])[0]
-        return Album(j["Id"], j.get("Name") or "Unbekanntes Album", j.get("AlbumArtist") or aa.get("Name") or "Unbekannt", aa.get("Id"),
+        return Album(j["Id"], j.get("Name") or _("Unbekanntes Album"), j.get("AlbumArtist") or aa.get("Name") or _("Unbekannt"), aa.get("Id"),
                      j.get("ProductionYear"), j["Id"] if "Primary" in (j.get("ImageTags") or {}) else None, (j.get("Genres") or [None])[0])
 
     def albums(self, order="newest", size=100, offset=0):
@@ -234,7 +235,7 @@ class MediaBrowser:
         r = _request(f"{self.base}/Playlists?{q}", self._auth(), {"Name": name, "Ids": first, "UserId": self.user_id, "MediaType": "Audio"})
         pid = (r or {}).get("Id") if isinstance(r, dict) else None
         if not pid:
-            raise ServerError("Die Playlist wurde nicht angelegt.")
+            raise ServerError(_("Die Playlist wurde nicht angelegt."))
         for chunk in rest:
             self.add_to_playlist(pid, [], chunk)
         return Playlist(pid, name, len(ids))
@@ -397,8 +398,8 @@ class Subsonic:
         r = _request(self._url(method, **params))["subsonic-response"]
         if r.get("status") != "ok":
             code = (r.get("error") or {}).get("code")
-            raise ServerError("Anmeldung abgelehnt – Benutzername oder Passwort stimmen nicht." if code in (40, 41) else
-                              (r.get("error") or {}).get("message") or "Der Server hat abgelehnt.")
+            raise ServerError(_("Anmeldung abgelehnt – Benutzername oder Passwort stimmen nicht.") if code in (40, 41) else
+                              (r.get("error") or {}).get("message") or _("Der Server hat abgelehnt."))
         return r
 
     def check(self):
@@ -407,7 +408,7 @@ class Subsonic:
 
     @staticmethod
     def _track(j):
-        return Track(j["id"], j.get("title") or "Unbekannt", j.get("artist") or "Unbekannt", j.get("album") or "", j.get("albumId"),
+        return Track(j["id"], j.get("title") or _("Unbekannt"), j.get("artist") or _("Unbekannt"), j.get("album") or "", j.get("albumId"),
                      j.get("duration") or 0, j.get("track"), j.get("discNumber"), j.get("year") or None, j.get("coverArt"), "starred" in j)
 
     @staticmethod
@@ -457,7 +458,7 @@ class Subsonic:
         r = self._call("createPlaylist", name=name, songId=ids[:100])
         pid = (r.get("playlist") or {}).get("id") or next((p.id for p in reversed(self.playlists()) if p.name == name), None)
         if not pid:
-            raise ServerError("Die Playlist wurde nicht angelegt.")
+            raise ServerError(_("Die Playlist wurde nicht angelegt."))
         for i in range(100, len(ids), 100):
             self._call("updatePlaylist", playlistId=pid, songIdToAdd=ids[i:i + 100])
         return Playlist(pid, name, len(ids))

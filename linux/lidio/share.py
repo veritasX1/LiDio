@@ -3,6 +3,7 @@ The details sit after the "#", which a browser never sends to the web server. On
 from the same server when there is an account on it, else the same song from the own library."""
 import urllib.parse
 from dataclasses import dataclass
+from .i18n import _
 
 HOST, PATH = "lisoft.goip.de", "/lidio/t"
 
@@ -24,7 +25,7 @@ class Shared:
         return f"https://{HOST}{PATH}#" + "&".join(f"{k}={_enc(v)}" for k, v in parts if v)
 
     def text(self):
-        return f"„{self.title}“ von {self.artist} – in LiDio anhören:\n{self.link()}"
+        return _("„{title}“ von {artist} – in LiDio anhören:\n{link}", title=self.title, artist=self.artist, link=self.link())
 
     @staticmethod
     def parse(uri):

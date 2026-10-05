@@ -2,6 +2,8 @@
 
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.app.Notification
 import android.content.Context
 import android.net.Uri
@@ -190,6 +192,6 @@ class Downloads : DownloadService(7, DEFAULT_FOREGROUND_NOTIFICATION_UPDATE_INTE
     override fun getScheduler(): Scheduler? = null
     override fun getForegroundNotification(downloads: MutableList<Download>, notMetRequirements: Int): Notification =
         DownloadNotificationHelper(this, Offline.CHANNEL).buildProgressNotification(this, R.drawable.media3_notification_small_icon, null,
-            if (notMetRequirements != 0) "Wartet auf WLAN" else null, downloads, notMetRequirements)
+            if (notMetRequirements != 0) tr("Wartet auf WLAN") else null, downloads, notMetRequirements)
 }
 

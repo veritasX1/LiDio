@@ -5,6 +5,7 @@ import random, re, threading
 import gi
 gi.require_version("Gst", "1.0")
 from gi.repository import GLib, Gst
+from .i18n import _
 
 Gst.init(None)
 
@@ -238,7 +239,7 @@ class Player:
             self.playing = False; self.playbin.set_state(Gst.State.NULL); self._changed()
         elif msg.type == Gst.MessageType.ERROR:
             err, _ = msg.parse_error()
-            self.error = "Wiedergabe nicht möglich – " + ("keine Verbindung zum Server" if "Could not" in err.message or "resolve" in err.message else err.message)
+            self.error = _("Wiedergabe nicht möglich – ") + (_("keine Verbindung zum Server") if "Could not" in err.message or "resolve" in err.message else err.message)
             self.playing = False; self._changed("error")
         elif msg.type == Gst.MessageType.ELEMENT and msg.get_structure() and msg.get_structure().get_name() == "spectrum":
             # PyGObject can't hand out GstValueList – the numbers come from the structure's text form.

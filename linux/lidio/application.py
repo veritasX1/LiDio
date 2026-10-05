@@ -11,11 +11,12 @@ from .player import Player
 from .offline import Offline
 from .mpris import Mpris
 from .servers import MediaBrowser, Subsonic, ServerError
+from .i18n import _
 
 # An optional extension runs as an app of its own: own launcher, own window, own dock icon.
 PRIVATE = os.environ.get("LIDIO_PRIVAT") == "1" and os.path.isdir(os.path.join(os.path.dirname(__file__), "privat"))
 APP_ID = "io.github.veritasx1.LiDio" + (".Privat" if PRIVATE else "")
-APP_NAME = "LiDio privat" if PRIVATE else "LiDio"
+APP_NAME = _("LiDio privat") if PRIVATE else "LiDio"
 
 
 class Application(Adw.Application):
@@ -46,12 +47,12 @@ class Application(Adw.Application):
         m = Gio.Menu()
         m.append("Mini-Player", "app.mini")
         m.append("Milkdrop", "app.milkdrop")
-        m.append("Playlist importieren …", "app.import")
-        m.append("Einstellungen …", "app.settings")
-        m.append("Server …", "app.servers")
-        m.append("Liedtexte aus dem Netz (lrclib.net)", "app.lyrics-online")
-        m.append("Hilfe", "app.help")
-        m.append("Über LiDio", "app.about")
+        m.append(_("Playlist importieren …"), "app.import")
+        m.append(_("Einstellungen …"), "app.settings")
+        m.append(_("Server …"), "app.servers")
+        m.append(_("Liedtexte aus dem Netz (lrclib.net)"), "app.lyrics-online")
+        m.append(_("Hilfe"), "app.help")
+        m.append(_("Über LiDio"), "app.about")
         m.append("Beenden", "app.quit")
         return m
 
@@ -147,13 +148,13 @@ class Application(Adw.Application):
         def done(r):
             acc, server, t = r
             if not t:
-                self.window.toast(f"„{shared.title}“ von {shared.artist} ist nicht in deiner Mediathek." if acc else
-                                  f"Für „{shared.title}“ zuerst einen Server verbinden.")
+                self.window.toast(_("„{title}“ von {artist} ist nicht in deiner Mediathek.", title=shared.title, artist=shared.artist) if acc else
+                                  _("Für „{title}“ zuerst einen Server verbinden.", title=shared.title))
                 return
             if acc["id"] != (accounts.active() or {}).get("id"):
                 accounts.set_active(acc["id"]); self.window.connect_account()
             self.player.play(server, [t])
-            self.window.toast(f"Spielt „{t.title}“ – geteilt von jemandem mit LiDio")
+            self.window.toast(_("Spielt „{title}“ – geteilt von jemandem mit LiDio", title=t.title))
         run(work, done, lambda m: self.window.toast(m))
 
     def present_window(self):
@@ -168,7 +169,7 @@ class Application(Adw.Application):
         if not self._held:
             self.hold(); self._held = True
         n = Gio.Notification.new("LiDio spielt weiter")
-        n.set_body("Steuern über die Medienanzeige oben oder die Medientasten. Ganz beenden: Strg+Q im Fenster.")
+        n.set_body(_("Steuern über die Medienanzeige oben oder die Medientasten. Ganz beenden: Strg+Q im Fenster."))
         self.send_notification("hintergrund", n)
 
     def _playing_changed(self, what):
@@ -230,42 +231,48 @@ class Application(Adw.Application):
 
     def settings_dialog(self):
         from gi.repository import Secret
-        d = Adw.PreferencesDialog(title="Einstellungen")
+        d = Adw.PreferencesDialog(title=_("Einstellungen"))
         page = Adw.PreferencesPage(title="Allgemein", icon_name="preferences-system-symbolic")
-        look = Adw.PreferencesGroup(title="Darstellung")
-        modern = Adw.ComboRow(title="Erscheinungsbild", subtitle="Modern: wie Musik in macOS 26 (Glas, große Cover)",
+        look = Adw.PreferencesGroup(title=_("Darstellung"))
+        modern = Adw.ComboRow(title=_("Erscheinungsbild"), subtitle=_("Modern: wie Musik in macOS 26 (Glas, große Cover)"),
                               model=Gtk.StringList.new(["Modern", "Klassisch"]))
         modern.set_selected(0 if self._setting("modern", True) else 1)
         modern.connect("notify::selected", lambda r, _: (self._set("modern", r.get_selected() == 0), self.window and self.window.apply_look()))
         look.add(modern)
-        dup = Adw.SwitchRow(title="Doppelte ausblenden", subtitle="Gleicher Titel vom gleichen Interpreten nur einmal", active=self._setting("doppelte", True))
+        dup = Adw.SwitchRow(title=_("Doppelte ausblenden"), subtitle=_("Gleicher Titel vom gleichen Interpreten nur einmal"), active=self._setting("doppelte", True))
         dup.connect("notify::active", lambda r, _: self._set("doppelte", r.get_active()))
         look.add(dup)
-        keep = Adw.SwitchRow(title="Gehörtes behalten", subtitle="Was du vom Server hörst, legt LiDio auch auf diesem Computer ab (unter „Geladen“).",
+        keep = Adw.SwitchRow(title=_("Gehörtes behalten"), subtitle=_("Was du vom Server hörst, legt LiDio auch auf diesem Computer ab (unter „Geladen“)."),
                              active=self._setting("behalten", False))
         keep.connect("notify::active", lambda r, _: self._set("behalten", r.get_active()))
         look.add(keep)
-        small = Adw.ComboRow(title="Mini-Player", subtitle="Strg+Umschalt+M. Winamp: mit echten Winamp-2-Skins aus dem Skin-Museum",
+        from . import i18n
+        codes = [None] + list(i18n.LANGUAGES)
+        lang = Adw.ComboRow(title=_("Sprache"), subtitle=_("Die Sprache wechselt beim nächsten Start von LiDio."),
+                            model=Gtk.StringList.new([_("System")] + list(i18n.LANGUAGES.values())))
+        lang.set_selected(codes.index(self._setting("sprache", None)) if self._setting("sprache", None) in codes else 0)
+        lang.connect("notify::selected", lambda r, _x: i18n.set_language(codes[r.get_selected()]))
+        look.add(lang)
+        small = Adw.ComboRow(title="Mini-Player", subtitle=_("Strg+Umschalt+M. Winamp: mit echten Winamp-2-Skins aus dem Skin-Museum"),
                              model=Gtk.StringList.new(["Wie Musik (Apple)", "Winamp"]))
         small.set_selected(1 if self._setting("klein", "apple") == "winamp" else 0)
         small.connect("notify::selected", lambda r, _: self._set("klein", "winamp" if r.get_selected() == 1 else "apple"))
         look.add(small)
         page.add(look)
         lyr = Adw.PreferencesGroup(title="Liedtexte")
-        net = Adw.SwitchRow(title="Liedtexte aus dem Netz", subtitle="Fehlt einer auf dem Server, fragt LiDio lrclib.net (nur Titel und Interpret).",
+        net = Adw.SwitchRow(title=_("Liedtexte aus dem Netz"), subtitle=_("Fehlt einer auf dem Server, fragt LiDio lrclib.net (nur Titel und Interpret)."),
                             active=self._setting("liedtexteNetz", True))
         net.connect("notify::active", lambda r, _: (self._set("liedtexteNetz", r.get_active()), self.lookup_action("lyrics-online").set_state(GLib.Variant("b", r.get_active()))))
         lyr.add(net); page.add(lyr)
-        sp = Adw.PreferencesGroup(title="Spotify-Playlists (optional)",
-                                  description="Spotify gibt Playlists nur an eigene Apps heraus: auf developer.spotify.com kostenlos eine App anlegen "
-                                              "und Client-ID und Secret hier eintragen. Sie bleiben auf diesem Computer (Secret im Schlüsselbund).")
+        sp = Adw.PreferencesGroup(title=_("Spotify-Playlists (optional)"),
+                                  description=_("Spotify gibt Playlists nur an eigene Apps heraus: auf developer.spotify.com kostenlos eine App anlegen und Client-ID und Secret hier eintragen. Sie bleiben auf diesem Computer (Secret im Schlüsselbund)."))
         cid = Adw.EntryRow(title="Client-ID", text=self._setting("spotifyId", ""))
         sec = Adw.PasswordEntryRow(title="Client-Secret", text=self.spotify_key()[1])
 
         def store(*_):
             self._set("spotifyId", cid.get_text().strip())
             if sec.get_text().strip():
-                Secret.password_store_sync(accounts.SCHEMA, {"account": "spotify"}, Secret.COLLECTION_DEFAULT, "LiDio – Spotify", sec.get_text().strip(), None)
+                Secret.password_store_sync(accounts.SCHEMA, {"account": "spotify"}, Secret.COLLECTION_DEFAULT, _("LiDio – Spotify"), sec.get_text().strip(), None)
             else:
                 Secret.password_clear_sync(accounts.SCHEMA, {"account": "spotify"}, None)
         for r in (cid, sec):
@@ -276,7 +283,7 @@ class Application(Adw.Application):
 
     def about(self):
         a = Adw.AboutDialog(application_name=APP_NAME, application_icon=APP_ID, version="0.1", developer_name="Olaf Winkler",
-                            license_type=Gtk.License.GPL_3_0, comments="Deine Musik vom eigenen Server – wie Musik auf dem Mac, ohne Abo.",
+                            license_type=Gtk.License.GPL_3_0, comments=_("Deine Musik vom eigenen Server – wie Musik auf dem Mac, ohne Abo."),
                             website="https://lisoft.goip.de")
         a.present(self.window)
 
@@ -284,7 +291,7 @@ class Application(Adw.Application):
     def server_dialog(self):
         if not self.window:
             return
-        d = Adw.Dialog(title="Server", content_width=460)
+        d = Adw.Dialog(title=_("Server"), content_width=460)
         tv = Adw.ToolbarView(); tv.add_top_bar(Adw.HeaderBar())
         page = Adw.PreferencesPage()
         have = accounts.all_accounts()
@@ -295,20 +302,20 @@ class Application(Adw.Application):
                 use = Gtk.CheckButton(active=a["id"] == (accounts.active() or {}).get("id"), valign=Gtk.Align.CENTER)
                 use.connect("toggled", lambda b, a=a: (accounts.set_active(a["id"]), self.window.connect_account(), d.close()) if b.get_active() else None)
                 row.add_prefix(use)
-                rm = Gtk.Button(icon_name="user-trash-symbolic", css_classes=["flat"], valign=Gtk.Align.CENTER, tooltip_text="Entfernen")
+                rm = Gtk.Button(icon_name="user-trash-symbolic", css_classes=["flat"], valign=Gtk.Align.CENTER, tooltip_text=_("Entfernen"))
                 rm.connect("clicked", lambda b, a=a: (accounts.remove(a["id"]), d.close(), self.window.connect_account()))
                 row.add_suffix(rm)
                 g.add(row)
             page.add(g)
-        g = Adw.PreferencesGroup(title="Server hinzufügen", description="Deine Musik von deinem eigenen Server – ohne Abo.")
+        g = Adw.PreferencesGroup(title=_("Server hinzufügen"), description=_("Deine Musik von deinem eigenen Server – ohne Abo."))
         kinds = Gtk.StringList.new(["Emby", "Jellyfin", "Navidrome", "Ordner auf diesem Computer"])
-        kind = Adw.ComboRow(title="Quelle", model=kinds)
+        kind = Adw.ComboRow(title=_("Quelle"), model=kinds)
         folders = []
-        pick = Adw.ActionRow(title="Ordner wählen …", subtitle="z. B. dein Musik-Ordner – LiDio liest nur diese", activatable=True, visible=False)
+        pick = Adw.ActionRow(title=_("Ordner wählen …"), subtitle=_("z. B. dein Musik-Ordner – LiDio liest nur diese"), activatable=True, visible=False)
         pick.add_suffix(Gtk.Image.new_from_icon_name("folder-open-symbolic"))
 
         def choose(*_):
-            fd = Gtk.FileDialog(title="Musik-Ordner wählen")
+            fd = Gtk.FileDialog(title=_("Musik-Ordner wählen"))
 
             def done(dlg, res):
                 try:
@@ -319,13 +326,13 @@ class Application(Adw.Application):
                     path = files.get_item(i).get_path()
                     if path and path not in folders:
                         folders.append(path)
-                pick.set_subtitle("\n".join(folders) or "z. B. dein Musik-Ordner")
+                pick.set_subtitle("\n".join(folders) or _("z. B. dein Musik-Ordner"))
             fd.select_multiple_folders(self.window, None, done)
         pick.connect("activated", choose)
-        address = Adw.EntryRow(title="Adresse im WLAN (z. B. 192.168.1.20:8096)")
-        external = Adw.EntryRow(title="Unterwegs (optional, z. B. musik.example.de)")
-        user = Adw.EntryRow(title="Benutzer")
-        password = Adw.PasswordEntryRow(title="Passwort")
+        address = Adw.EntryRow(title=_("Adresse im WLAN (z. B. 192.168.1.20:8096)"))
+        external = Adw.EntryRow(title=_("Unterwegs (optional, z. B. musik.example.de)"))
+        user = Adw.EntryRow(title=_("Benutzer"))
+        password = Adw.PasswordEntryRow(title=_("Passwort"))
         for w in (kind, pick, address, external, user, password):
             g.add(w)
 
@@ -337,10 +344,9 @@ class Application(Adw.Application):
         kind.connect("notify::selected", kind_changed)
         page.add(g)
         status = Gtk.Label(wrap=True, css_classes=["error"], margin_top=8)
-        btn = Gtk.Button(label="Verbinden", css_classes=["suggested-action", "pill"], halign=Gtk.Align.CENTER, margin_top=12)
+        btn = Gtk.Button(label=_("Verbinden"), css_classes=["suggested-action", "pill"], halign=Gtk.Align.CENTER, margin_top=12)
         bg = Adw.PreferencesGroup(); box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL); box.append(status); box.append(btn); bg.add(box)
-        bg.set_description("LiDio spricht nur mit diesem Server. Das Passwort bzw. der Zugangsschlüssel liegt im GNOME-Schlüsselbund. "
-                           "Keine Werbung, keine Statistik, kein Konto bei uns.")
+        bg.set_description(_("LiDio spricht nur mit diesem Server. Das Passwort bzw. der Zugangsschlüssel liegt im GNOME-Schlüsselbund. Keine Werbung, keine Statistik, kein Konto bei uns."))
         page.add(bg)
         tv.set_content(page); d.set_child(tv)
 
@@ -348,19 +354,19 @@ class Application(Adw.Application):
             k = ["emby", "jellyfin", "navidrome", "local"][kind.get_selected()]
             if k == "local":
                 if not folders:
-                    status.set_text("Bitte mindestens einen Ordner wählen."); return
-                btn.set_sensitive(False); status.set_text("Liest deine Ordner …")
+                    status.set_text(_("Bitte mindestens einen Ordner wählen.")); return
+                btn.set_sensitive(False); status.set_text(_("Liest deine Ordner …"))
                 from .window import run
                 from .local import LocalLibrary
 
                 def made(acc_and_n):
                     d.close(); self.window.connect_account()
-                acc = accounts.add("local", "\n".join(folders), "", "", "", "Auf diesem Computer")
+                acc = accounts.add("local", "\n".join(folders), "", "", "", _("Auf diesem Computer"))
                 run(lambda: (acc, LocalLibrary(acc["id"], folders).scan()), made, lambda m: (btn.set_sensitive(True), status.set_text(m)))
                 return
             a, ext, u, pw = address.get_text().strip(), external.get_text().strip(), user.get_text().strip(), password.get_text()
             if not a or not u:
-                status.set_text("Bitte Adresse und Benutzername eintragen."); return
+                status.set_text(_("Bitte Adresse und Benutzername eintragen.")); return
             btn.set_sensitive(False); status.set_text("")
 
             def work():

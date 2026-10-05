@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -91,19 +93,19 @@ fun CollectionMenu(state: AppState, server: MusicServer, pin: Pin, subtitle: Str
     val account = state.account?.id ?: ""
     fun withTracks(then: (List<Track>) -> Unit) = scope.launch {
         val tracks = withContext(Dispatchers.IO) { runCatching { if (pin.kind == "album") server.album(pin.id).second else server.playlist(pin.id).second }.getOrNull() }
-        if (tracks.isNullOrEmpty()) state.notice = "„${pin.name}“ ließ sich nicht laden." else then(tracks)
+        if (tracks.isNullOrEmpty()) state.notice = tr("„{name}“ ließ sich nicht laden.", "name" to pin.name) else then(tracks)
     }
     picking?.let { PlaylistPicker(state, server, it) { picking = null; onClose() }; return }
     MenuSheet(pin.name, subtitle, onClose) {
-        MenuRow("Wiedergabe", Symbol.Play) { withTracks { state.playback.play(server, it) }; onClose() }
-        MenuRow("Zufall", Symbol.Shuffle) { withTracks { state.playback.play(server, it, shuffled = true) }; onClose() }
-        MenuRow("Als Nächstes spielen", Symbol.PlayNext) { withTracks { state.playback.playNextAll(server, it) }; onClose() }
-        MenuRow("Zuletzt spielen", Symbol.PlayLast) { withTracks { state.playback.addAllToQueue(server, it) }; onClose() }
-        MenuRow("Zur Playlist hinzufügen …", Symbol.Playlists) { withTracks { picking = it } }
+        MenuRow(tr("Wiedergabe"), Symbol.Play) { withTracks { state.playback.play(server, it) }; onClose() }
+        MenuRow(tr("Zufall"), Symbol.Shuffle) { withTracks { state.playback.play(server, it, shuffled = true) }; onClose() }
+        MenuRow(tr("Als Nächstes spielen"), Symbol.PlayNext) { withTracks { state.playback.playNextAll(server, it) }; onClose() }
+        MenuRow(tr("Zuletzt spielen"), Symbol.PlayLast) { withTracks { state.playback.addAllToQueue(server, it) }; onClose() }
+        MenuRow(tr("Zur Playlist hinzufügen …"), Symbol.Playlists) { withTracks { picking = it } }
         val pinned = Pins.has(context, account, pin.id)
-        MenuRow(if (pinned) "Lösen" else "Anheften", Symbol.Pin, last = true, filled = pinned) {
+        MenuRow(if (pinned) "Lösen" else tr("Anheften"), Symbol.Pin, last = true, filled = pinned) {
             val on = Pins.toggle(context, account, pin); state.generation++
-            state.notice = if (on) "„${pin.name}“ angeheftet – oben in der Mediathek." else "„${pin.name}“ gelöst."; onClose()
+            state.notice = if (on) tr("„{name}“ angeheftet – oben in der Mediathek.", "name" to pin.name) else tr("„{name}“ gelöst.", "name" to pin.name); onClose()
         }
     }
 }
@@ -117,31 +119,31 @@ fun PlaylistPicker(state: AppState, server: MusicServer, tracks: List<Track>, on
     var naming by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
     fun done(text: String) { state.notice = text; state.generation++; onClose() }
-    MenuSheet("Zur Playlist hinzufügen", if (tracks.size == 1) tracks[0].title else "${tracks.size} Titel", onClose) {
+    MenuSheet(tr("Zur Playlist hinzufügen"), if (tracks.size == 1) tracks[0].title else tr("{size} Titel", "size" to tracks.size), onClose) {
         if (naming) {
             Row(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(ink.grouped).padding(10.dp)) {
                 Box(Modifier.weight(1f)) {
-                    if (name.isEmpty()) Label("Name der Playlist", 17f, color = ink.tertiary)
+                    if (name.isEmpty()) Label(tr("Name der Playlist"), 17f, color = ink.tertiary)
                     BasicTextField(name, { name = it }, singleLine = true, textStyle = style(17f, color = ink.label), cursorBrush = SolidColor(ink.tint),
-                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Name der Playlist" })
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = tr("Name der Playlist") })
                 }
             }
             MenuRow("Anlegen", Symbol.Plus, last = true, color = ink.tint) {
-                val n = name.trim().ifEmpty { "Neue Playlist" }
+                val n = name.trim().ifEmpty { tr("Neue Playlist") }
                 scope.launch {
                     val ok = withContext(Dispatchers.IO) { runCatching { server.createPlaylist(n, tracks) }.isSuccess }
-                    done(if (ok) "Playlist „$n“ angelegt." else "Die Playlist ließ sich nicht anlegen.")
+                    done(if (ok) tr("Playlist „{n}“ angelegt.", "n" to n) else tr("Die Playlist ließ sich nicht anlegen."))
                 }
             }
             return@MenuSheet
         }
-        MenuRow("Neue Playlist …", Symbol.Plus, color = ink.tint) { naming = true }
+        MenuRow(tr("Neue Playlist …"), Symbol.Plus, color = ink.tint) { naming = true }
         LazyColumn(Modifier.heightIn(max = 360.dp)) {
             items(lists.value.orEmpty(), key = { it.id }) { p ->
                 ListRow(p.name, onClick = {
                     scope.launch {
                         val ok = withContext(Dispatchers.IO) { runCatching { server.addToPlaylist(p.id, tracks) }.getOrDefault(false) }
-                        done(if (ok) "Zu „${p.name}“ hinzugefügt." else "„${p.name}“ lässt sich hier nicht ändern.")
+                        done(if (ok) tr("Zu „{name}“ hinzugefügt.", "name" to p.name) else tr("„{name}“ lässt sich hier nicht ändern.", "name" to p.name))
                     }
                 }, leading = { Cover(server.cover(p.coverId, 120), Modifier.size(40.dp), 5.dp) }, height = 56.dp)
             }
@@ -161,7 +163,7 @@ fun PinnedGrid(state: AppState, server: MusicServer) {
         pins.chunked(3).forEach { row ->
             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { p ->
-                    Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).combinedClickable(role = Role.Button, onLongClick = { menu = p }, onLongClickLabel = "Mehr") {
+                    Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).combinedClickable(role = Role.Button, onLongClick = { menu = p }, onLongClickLabel = tr("Mehr")) {
                         state.open(if (p.kind == "album") Route.AlbumPage(p.id, web = p.web) else Route.PlaylistPage(p.id, p.name, web = p.web)) }) {
                         Cover(p.cover?.let { server.cover(it, 300) }, Modifier.fillMaxWidth().aspectRatio(1f), 10.dp,
                             fallback = if (p.kind == "album") ({ server.albumCoverFallback(p.id, 300) }) else null)
@@ -181,41 +183,41 @@ fun PinnedGrid(state: AppState, server: MusicServer) {
 fun ShareSheet(state: AppState, server: MusicServer, playlist: Playlist, onClose: () -> Unit) {
     val ink = Ink
     val scope = rememberCoroutineScope()
-    val (load, _) = rememberLoad(server, playlist.id, "freigabe") { server.sharing(playlist.id) ?: throw ServerError("Dieser Server kann Playlists nicht freigeben.") }
+    val (load, _) = rememberLoad(server, playlist.id, "freigabe") { server.sharing(playlist.id) ?: throw ServerError(tr("Dieser Server kann Playlists nicht freigeben.")) }
     var everyone by remember { mutableStateOf<Boolean?>(null) }
     val levels = remember { androidx.compose.runtime.mutableStateMapOf<String, String>() }
     val s = load.value
     if (s != null && everyone == null) { everyone = s.everyone; s.users.forEach { levels[it.id] = it.level } }
-    MenuSheet("„${playlist.name}“ freigeben", "Ohne Freigabe ist die Playlist nur für dich.", onClose) {
+    MenuSheet(tr("„{name}“ freigeben", "name" to playlist.name), tr("Ohne Freigabe ist die Playlist nur für dich."), onClose) {
         when {
-            load.loading -> Label("Wird geladen …", 15f, color = ink.secondary, modifier = Modifier.padding(16.dp))
+            load.loading -> Label(tr("Wird geladen …"), 15f, color = ink.secondary, modifier = Modifier.padding(16.dp))
             load.error != null -> Label(load.error, 15f, color = ink.secondary, lines = 3, modifier = Modifier.padding(16.dp))
-            s != null && !s.canManage -> Label("Diese Playlist gehört jemand anderem – freigeben kann nur, wer sie angelegt hat.", 15f,
+            s != null && !s.canManage -> Label(tr("Diese Playlist gehört jemand anderem – freigeben kann nur, wer sie angelegt hat."), 15f,
                 color = ink.secondary, lines = 3, modifier = Modifier.padding(16.dp))
             s != null -> {
-                ListRow("Alle auf diesem Server", "Jeder Benutzer darf zuhören", height = 60.dp,
-                    trailing = { IosSwitch(everyone == true, "Alle auf diesem Server") { on -> everyone = on
+                ListRow(tr("Alle auf diesem Server"), tr("Jeder Benutzer darf zuhören"), height = 60.dp,
+                    trailing = { IosSwitch(everyone == true, tr("Alle auf diesem Server")) { on -> everyone = on
                         if (on) s.users.forEach { if (levels[it.id] == "none") levels[it.id] = "read" } } })
                 if (s.perUser) LazyColumn(Modifier.heightIn(max = 340.dp)) {
                     items(s.users, key = { it.id }) { u ->
                         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
                             Label(u.name, 17f)
                             val options = listOf("none", "read", "write")
-                            Segmented(listOf("Aus", "Hören", "Bearbeiten"), options.indexOf(levels[u.id] ?: "none").coerceAtLeast(0), Modifier.padding(top = 4.dp)) {
+                            Segmented(listOf("Aus", "Hören", tr("Bearbeiten")), options.indexOf(levels[u.id] ?: "none").coerceAtLeast(0), Modifier.padding(top = 4.dp)) {
                                 levels[u.id] = options[it]; if (options[it] == "none") everyone = false
                             }
                         }
                     }
                 }
-                MenuRow("Fertig", Symbol.Check, last = true, color = ink.tint) {
+                MenuRow(tr("Fertig"), Symbol.Check, last = true, color = ink.tint) {
                     scope.launch {
                         val ok = withContext(Dispatchers.IO) { server.share(playlist.id, levels.toMap(), everyone == true) }
                         val shared = everyone == true || levels.values.any { it != "none" }
                         state.notice = when {
-                            !ok -> "Die Freigabe ließ sich nicht speichern."
-                            !shared -> "„${playlist.name}“ ist jetzt nur für dich."
-                            everyone == true -> "„${playlist.name}“ ist für alle auf diesem Server freigegeben."
-                            else -> "„${playlist.name}“ ist freigegeben für ${s.users.filter { levels[it.id] != "none" }.joinToString(", ") { it.name }}."
+                            !ok -> tr("Die Freigabe ließ sich nicht speichern.")
+                            !shared -> tr("„{name}“ ist jetzt nur für dich.", "name" to playlist.name)
+                            everyone == true -> tr("„{name}“ ist für alle auf diesem Server freigegeben.", "name" to playlist.name)
+                            else -> tr("„{name}“ ist freigegeben für {value}.", "name" to playlist.name, "value" to (s.users.filter { levels[it.id] != "none" }.joinToString(", ") { it.name }))
                         }
                         onClose()
                     }

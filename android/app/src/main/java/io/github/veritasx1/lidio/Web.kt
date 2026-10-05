@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -90,7 +92,7 @@ object WebDownloads {
     const val CHANNEL = "netz"
 
     fun folder(context: Context): File =
-        File(context.externalMediaDirs.firstOrNull() ?: context.filesDir, "Aus dem Netz").apply { mkdirs() }
+        File(context.externalMediaDirs.firstOrNull() ?: context.filesDir, tr("Aus dem Netz")).apply { mkdirs() }
 
     private fun file(context: Context) = File(context.filesDir, "netz-warteschlange.json")
 
@@ -176,7 +178,7 @@ object WebDownloads {
                 val engine = Variant.engine(context) ?: return@execute
                 while (true) {
                     val job = synchronized(this) { jobs.firstOrNull { it.state == WebJob.State.Waiting } } ?: break
-                    change(context, job.id) { it.copy(state = WebJob.State.Loading, note = "Wird vorbereitet …") }
+                    change(context, job.id) { it.copy(state = WebJob.State.Loading, note = tr("Wird vorbereitet …")) }
                     notify(jobs.first { it.id == job.id })
                     var last = 0L
                     try {
@@ -190,7 +192,7 @@ object WebDownloads {
                         WebLibrary.added(context)
                     } catch (e: Exception) {
                         if (jobs.any { it.id == job.id })
-                            change(context, job.id) { it.copy(state = WebJob.State.Failed, note = e.message?.take(300) ?: "Unbekannter Fehler") }
+                            change(context, job.id) { it.copy(state = WebJob.State.Failed, note = e.message?.take(300) ?: tr("Unbekannter Fehler")) }
                     }
                 }
             } finally {
@@ -221,7 +223,7 @@ class WebLoadService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26 && manager.getNotificationChannel(WebDownloads.CHANNEL) == null)
-            manager.createNotificationChannel(NotificationChannel(WebDownloads.CHANNEL, "Aus dem Netz laden", NotificationManager.IMPORTANCE_LOW))
+            manager.createNotificationChannel(NotificationChannel(WebDownloads.CHANNEL, tr("Aus dem Netz laden"), NotificationManager.IMPORTANCE_LOW))
         val first = notification(null)
         if (Build.VERSION.SDK_INT >= 29) startForeground(8, first, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else startForeground(8, first)
         WebDownloads.load(this)
@@ -238,9 +240,9 @@ class WebLoadService : Service() {
         val waiting = WebDownloads.jobs.count { it.state == WebJob.State.Waiting }
         val builder = (if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, WebDownloads.CHANNEL) else Notification.Builder(this))
             .setSmallIcon(R.drawable.media3_notification_small_icon).setOngoing(true).setContentIntent(open).setOnlyAlertOnce(true)
-        if (job == null) return builder.setContentTitle("Aus dem Netz laden").setContentText("Wird vorbereitet …").build()
-        return builder.setContentTitle("„${job.hit.title}“ von ${job.hit.source.label}")
-            .setContentText(listOf(job.note, if (waiting > 0) "noch $waiting in der Warteschlange" else "").filter { it.isNotEmpty() }.joinToString(" · "))
+        if (job == null) return builder.setContentTitle(tr("Aus dem Netz laden")).setContentText(tr("Wird vorbereitet …")).build()
+        return builder.setContentTitle(tr("„{title}“ von {label}", "title" to job.hit.title, "label" to job.hit.source.label))
+            .setContentText(listOf(job.note, if (waiting > 0) tr("noch {waiting} in der Warteschlange", "waiting" to waiting) else "").filter { it.isNotEmpty() }.joinToString(" · "))
             .setProgress(100, (job.progress * 100).toInt(), job.progress <= 0f).build()
     }
 }

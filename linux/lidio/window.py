@@ -15,10 +15,11 @@ from .player import REPEAT_OFF, REPEAT_ONE
 from .widgets import Where, DownloadButton
 from .more import MoreMixin
 from .importui import ImportMixin
+from .i18n import _
 
 try:       # optional extension package – not part of the published source
     if os.environ.get("LIDIO_PRIVAT") != "1":
-        raise ImportError("öffentliche Fassung")
+        raise ImportError(_("öffentliche Fassung"))
     from . import privat as PRIVAT
     from .privat import ui as PRIVAT_UI
     if not PRIVAT.available():
@@ -33,7 +34,7 @@ def run(work, done, fail=None):
         try:
             r = work()
         except Exception as e:      # noqa: BLE001 – every failure ends up as a German message
-            GLib.idle_add(lambda: ((fail or (lambda m: None))(str(e) if isinstance(e, ServerError) else "Unerwartete Antwort vom Server."), False)[1])
+            GLib.idle_add(lambda: ((fail or (lambda m: None))(str(e) if isinstance(e, ServerError) else _("Unerwartete Antwort vom Server.")), False)[1])
             return
         GLib.idle_add(lambda: (done(r), False)[1])
     threading.Thread(target=go, daemon=True).start()
@@ -46,7 +47,7 @@ def clock(seconds):
 
 def summary(n, seconds):
     minutes = round(seconds / 60)
-    return f"{n} Titel, " + (f"{minutes // 60} Std. {minutes % 60} Min." if minutes >= 60 else f"{minutes} Minuten")
+    return _("{n} Titel, ", n=n) + (_("{value} Std. {value2} Min.", value=minutes // 60, value2=minutes % 60) if minutes >= 60 else _("{minutes} Minuten", minutes=minutes))
 
 
 def label(text, css=None, xalign=0, ellipsize=True, wrap=False, lines=1):
@@ -76,11 +77,11 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         # ---- the toolbar: transport | now playing | volume, lyrics, queue ----
         header = Adw.HeaderBar()
         transport = Gtk.Box(spacing=2, css_classes=["transport"])
-        self.shuffle_btn = self._button("media-playlist-shuffle-symbolic", "Zufall", lambda *_: self.player.toggle_shuffle(), toggle=True)
-        self.prev_btn = self._button("media-skip-backward-symbolic", "Zurück", lambda *_: self.player.previous())
-        self.play_btn = self._button("media-playback-start-symbolic", "Wiedergabe", lambda *_: self.player.toggle()); self.play_btn.add_css_class("play")
-        self.next_btn = self._button("media-skip-forward-symbolic", "Weiter", lambda *_: self.player.next())
-        self.repeat_btn = self._button("media-playlist-repeat-symbolic", "Wiederholen", lambda *_: self.player.cycle_repeat(), toggle=True)
+        self.shuffle_btn = self._button("media-playlist-shuffle-symbolic", _("Zufall"), lambda *_: self.player.toggle_shuffle(), toggle=True)
+        self.prev_btn = self._button("media-skip-backward-symbolic", _("Zurück"), lambda *_: self.player.previous())
+        self.play_btn = self._button("media-playback-start-symbolic", _("Wiedergabe"), lambda *_: self.player.toggle()); self.play_btn.add_css_class("play")
+        self.next_btn = self._button("media-skip-forward-symbolic", _("Weiter"), lambda *_: self.player.next())
+        self.repeat_btn = self._button("media-playlist-repeat-symbolic", _("Wiederholen"), lambda *_: self.player.cycle_repeat(), toggle=True)
         for b in (self.shuffle_btn, self.prev_btn, self.play_btn, self.next_btn, self.repeat_btn):
             transport.append(b)
         header.pack_start(transport)
@@ -103,8 +104,8 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         lcd.append(self.lcd_star)
         header.set_title_widget(lcd)
 
-        self.queue_btn = self._button("view-list-bullet-symbolic", "Als Nächstes", self._toggle_queue, toggle=True)
-        self.lyrics_btn = self._button("chat-bubble-text-symbolic", "Liedtext", self._toggle_lyrics, toggle=True)
+        self.queue_btn = self._button("view-list-bullet-symbolic", _("Als Nächstes"), self._toggle_queue, toggle=True)
+        self.lyrics_btn = self._button("chat-bubble-text-symbolic", _("Liedtext"), self._toggle_lyrics, toggle=True)
         self.volume = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 1, 0.01); self.volume.set_draw_value(False)
         self.volume.set_size_request(110, -1); self.volume.set_value(1.0)
         self.volume.connect("value-changed", lambda s: self.player.set_volume(s.get_value()))
@@ -118,7 +119,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
 
         # ---- sidebar ----
         side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.search = Gtk.SearchEntry(placeholder_text="Suchen", margin_start=10, margin_end=10, margin_top=10, margin_bottom=4)
+        self.search = Gtk.SearchEntry(placeholder_text=_("Suchen"), margin_start=10, margin_end=10, margin_top=10, margin_bottom=4)
         self.search.connect("search-changed", self._search_changed)
         side.append(self.search)
         scroll = Gtk.ScrolledWindow(vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
@@ -214,10 +215,10 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         if not self.account:
             self.server = None
             self._fill_sidebar([])
-            btn = Gtk.Button(label="Server verbinden …", css_classes=["red-button"], halign=Gtk.Align.CENTER)
+            btn = Gtk.Button(label=_("Server verbinden …"), css_classes=["red-button"], halign=Gtk.Align.CENTER)
             btn.connect("clicked", lambda *_: self.app.server_dialog())
-            empty = Adw.StatusPage(icon_name="io.github.veritasx1.LiDio", title="Willkommen bei LiDio",
-                                   description="Deine Musik von deinem eigenen Server – Emby, Jellyfin oder Navidrome. Ohne Abo, ohne Werbung.", child=btn)
+            empty = Adw.StatusPage(icon_name="io.github.veritasx1.LiDio", title=_("Willkommen bei LiDio"),
+                                   description=_("Deine Musik von deinem eigenen Server – Emby, Jellyfin oder Navidrome. Ohne Abo, ohne Werbung."), child=btn)
             self.nav.replace([self._page("LiDio", empty)])
             # after the window exists – the dialog needs it as parent
             GLib.idle_add(lambda: (self.app.server_dialog(), False)[1])
@@ -245,14 +246,14 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         self.show_page("start")
         if server.kind == "local":
             # Folders: read what changed since last time, then show it.
-            run(server.scan, lambda n: (self.toast(f"{n} Titel in deinen Ordnern"), self.show_page("start")), self.toast)
+            run(server.scan, lambda n: (self.toast(_("{n} Titel in deinen Ordnern", n=n)), self.show_page("start")), self.toast)
 
     # ---------- sidebar ----------
-    TOP = [("start", "Start", "go-home-symbolic"), ("web-lists", "Playlists im Netz", "network-workgroup-symbolic")]
-    ENTRIES = [("recent", "Zuletzt hinzugefügt", "document-open-recent-symbolic"), ("artists", "Interpreten", "avatar-default-symbolic"),
-               ("albums", "Alben", "media-optical-symbolic"), ("tracks", "Titel", "audio-x-generic-symbolic"),
-               ("genres", "Genres", "view-grid-symbolic"), ("favorites", "Lieblingstitel", "starred-symbolic"),
-               ("downloaded", "Geladen", "folder-download-symbolic")]
+    TOP = [("start", _("Start"), "go-home-symbolic"), ("web-lists", _("Playlists im Netz"), "network-workgroup-symbolic")]
+    ENTRIES = [("recent", _("Zuletzt hinzugefügt"), "document-open-recent-symbolic"), ("artists", _("Interpreten"), "avatar-default-symbolic"),
+               ("albums", _("Alben"), "media-optical-symbolic"), ("tracks", _("Titel"), "audio-x-generic-symbolic"),
+               ("genres", _("Genres"), "view-grid-symbolic"), ("favorites", _("Lieblingstitel"), "starred-symbolic"),
+               ("downloaded", _("Geladen"), "folder-download-symbolic")]
 
     def _fill_sidebar(self, playlists):
         selected = getattr(self.sidebar.get_selected_row(), "key", None)
@@ -266,13 +267,13 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         for kind, pid, name in self.pins():
             self._side_row(("pin", kind, pid, name), name, "view-pin-symbolic", "Angeheftet")
         for key, text, icon in self.ENTRIES:
-            self._side_row(key, text, icon, "Mediathek")
+            self._side_row(key, text, icon, _("Mediathek"))
         if PRIVAT:
-            self._side_row("netz", "Aus dem Netz", "weather-overcast-symbolic", "Mediathek")
+            self._side_row("netz", _("Aus dem Netz"), "weather-overcast-symbolic", _("Mediathek"))
         for p in playlists:
-            self._side_row(("playlist", p.id, p.name), p.name, "view-list-symbolic", "Playlists")
+            self._side_row(("playlist", p.id, p.name), p.name, "view-list-symbolic", _("Playlists"))
         if self.server:
-            self._side_row("new-playlist", "Neue Playlist …", "list-add-symbolic", "Playlists")
+            self._side_row("new-playlist", _("Neue Playlist …"), "list-add-symbolic", _("Playlists"))
         for i in range(400):
             row = self.sidebar.get_row_at_index(i)
             if row is None:
@@ -325,15 +326,15 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         elif key == "downloaded":
             page = self.downloaded_page()
         elif key == "recent":
-            page = self.albums_page("Zuletzt hinzugefügt", "newest")
+            page = self.albums_page(_("Zuletzt hinzugefügt"), "newest")
         elif key == "albums":
-            page = self.albums_page("Alben", "title", sortable=True)
+            page = self.albums_page(_("Alben"), "title", sortable=True)
         elif key == "artists":
             page = self.artists_page()
         elif key == "tracks":
-            page = self.tracks_page("Titel", lambda: self.server.tracks(500))
+            page = self.tracks_page(_("Titel"), lambda: self.server.tracks(500))
         elif key == "favorites":
-            page = self.tracks_page("Lieblingstitel", self.server.favorites)
+            page = self.tracks_page(_("Lieblingstitel"), self.server.favorites)
         else:
             return
         self.nav.replace([page])
@@ -347,7 +348,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         return s
 
     def _loading(self):
-        return Adw.StatusPage(title="Wird geladen …")
+        return Adw.StatusPage(title=_("Wird geladen …"))
 
     def albums_page(self, title, order, sortable=False):
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -370,8 +371,8 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
 
         if sortable:
             spacer = Gtk.Box(hexpand=True); top.append(spacer)
-            choices = [("title", "Titel"), ("artist", "Interpret"), ("year", "Erscheinungsjahr"), ("newest", "Zuletzt hinzugefügt"), ("recent", "Zuletzt gespielt")]
-            drop = Gtk.DropDown.new_from_strings([c[1] for c in choices]); drop.set_tooltip_text("Sortieren nach")
+            choices = [("title", _("Titel")), ("artist", _("Interpret")), ("year", "Erscheinungsjahr"), ("newest", _("Zuletzt hinzugefügt")), ("recent", _("Zuletzt gespielt"))]
+            drop = Gtk.DropDown.new_from_strings([c[1] for c in choices]); drop.set_tooltip_text(_("Sortieren nach"))
             drop.set_valign(Gtk.Align.CENTER)
 
             def resort(d, _):
@@ -409,11 +410,11 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         if pin:
             pinned = self.is_pinned(pin)
-            b = Gtk.Button(label="Nicht mehr anheften" if pinned else "Anheften", css_classes=["flat"]); b.get_child().set_xalign(0)
+            b = Gtk.Button(label=_("Nicht mehr anheften") if pinned else _("Anheften"), css_classes=["flat"]); b.get_child().set_xalign(0)
             b.connect("clicked", lambda *_: (pop.popdown(), self.toggle_pin(pin)))
             col.append(b)
-        for text, act in [("Wiedergabe", lambda t: self.player.play(self.server, t)), ("Zufall", lambda t: self.player.play(self.server, t, shuffled=True)),
-                          ("Als Nächstes spielen", lambda t: self.player.play_next(t)), ("Zuletzt spielen", lambda t: self.player.add(t))]:
+        for text, act in [(_("Wiedergabe"), lambda t: self.player.play(self.server, t)), (_("Zufall"), lambda t: self.player.play(self.server, t, shuffled=True)),
+                          (_("Als Nächstes spielen"), lambda t: self.player.play_next(t)), (_("Zuletzt spielen"), lambda t: self.player.add(t))]:
             b = Gtk.Button(label=text, css_classes=["flat"]); b.get_child().set_xalign(0)
             b.connect("clicked", lambda w, a=act: (pop.popdown(), run(tracks_of, a)))
             col.append(b)
@@ -422,7 +423,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
 
     def album_page(self, album_id):
         page_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        page = self._page("Album", self._scroll(page_box))
+        page = self._page(_("Album"), self._scroll(page_box))
 
         def show(r):
             album, tracks = r
@@ -437,12 +438,12 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
             if album.artist_id:
                 artist.connect("clicked", lambda *_: self.push(self.artist_page(album.artist_id)))
             info.append(artist)
-            info.append(label(" · ".join(x for x in [album.genre or "", str(album.year or "")] if x).upper(), "dim caption"))
+            info.append(label(" · ".join(x for x in [self.genre_name(album.genre) if album.genre else "", str(album.year or "")] if x).upper(), "dim caption"))
             info.append(self._play_buttons(tracks, dedup=False))
             head.append(info)
             page_box.append(head)
             page_box.append(self.track_list(tracks, numbers=True))
-            foot = label((f"Erschienen {album.year}\n" if album.year else "") + summary(len(tracks), sum(t.duration for t in tracks)),
+            foot = label((_("Erschienen {year}\n", year=album.year) if album.year else "") + summary(len(tracks), sum(t.duration for t in tracks)),
                          "dim caption", ellipsize=False)
             foot.set_margin_start(40); foot.set_margin_top(12); foot.set_margin_bottom(30)
             page_box.append(foot)
@@ -452,9 +453,9 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
     def _play_buttons(self, tracks, extra=None, dedup=True):
         tracks = self._dedup(tracks) if dedup else tracks
         row = Gtk.Box(spacing=12, margin_top=14)
-        play = Gtk.Button(css_classes=["red-button"]); play.set_child(Gtk.Label(label="▶  Wiedergabe"))
+        play = Gtk.Button(css_classes=["red-button"]); play.set_child(Gtk.Label(label=_("▶  Wiedergabe")))
         play.connect("clicked", lambda *_: self.player.play(self.server, tracks))
-        shuf = Gtk.Button(css_classes=["red-button"]); shuf.set_child(Gtk.Label(label="⤮  Zufall"))
+        shuf = Gtk.Button(css_classes=["red-button"]); shuf.set_child(Gtk.Label(label=_("⤮  Zufall")))
         shuf.connect("clicked", lambda *_: self.player.play(self.server, tracks, shuffled=True))
         row.append(play); row.append(shuf)
         row.append(Gtk.Box(hexpand=True))
@@ -481,7 +482,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         allp[acc] = mine[:12]
         self.app._set("angeheftet", allp)
         self._fill_sidebar(self._playlists)
-        self.toast("Angeheftet – steht jetzt oben in der Seitenleiste" if self.is_pinned(pin) else "Nicht mehr angeheftet")
+        self.toast(_("Angeheftet – steht jetzt oben in der Seitenleiste") if self.is_pinned(pin) else _("Nicht mehr angeheftet"))
 
     def _dedup(self, tracks):
         """Setting "Doppelte ausblenden" (card 29c6affc): the same title by the same artist only once – not on album pages."""
@@ -509,7 +510,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
                 col.append(label(t.artist + (f" · {t.album}" if show_art and t.album else ""), "dim caption"))
             h.append(col)
             row.star = Gtk.Image.new_from_icon_name("starred-symbolic"); row.star.add_css_class("favorite"); row.star.set_visible(bool(t.favorite))
-            row.star.set_tooltip_text("Lieblingstitel")
+            row.star.set_tooltip_text(_("Lieblingstitel"))
             h.append(row.star)
             h.append(label(clock(t.duration) if t.duration else "", "track-time", xalign=1))
             row.where = Where(self.app.offline, t, lambda: self.server)
@@ -552,7 +553,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
 
     def artists_page(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.append(Gtk.Label(label="Interpreten", xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=8))
+        box.append(Gtk.Label(label=_("Interpreten"), xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=8))
         lst = Gtk.ListBox(css_classes=["navigation-sidebar"], margin_start=20, margin_end=20)
         box.append(lst)
 
@@ -563,11 +564,11 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
                 lst.append(row)
         lst.connect("row-activated", lambda l, r: self.push(self.artist_page(r.artist.id)))
         run(self.server.artists, show, self.toast)
-        return self._page("Interpreten", self._scroll(box))
+        return self._page(_("Interpreten"), self._scroll(box))
 
     def artist_page(self, artist_id):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        page = self._page("Interpret", self._scroll(box))
+        page = self._page(_("Interpret"), self._scroll(box))
 
         def show(r):
             artist, albums = r
@@ -613,8 +614,8 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
             box.append(self.track_list(tracks, show_art=True, playlist=p))
             if p.missing:
                 # What the playlist should have but the server lacks (written by the Android app's import) – greyed, like Music.
-                box.append(Gtk.Label(label="Fehlt auf dem Server", xalign=0, css_classes=["section-title"], margin_start=28, margin_top=22, margin_bottom=4))
-                box.append(Gtk.Label(label="Diese Titel stehen in der Playlist, liegen aber nicht auf deinem Server.", xalign=0, css_classes=["dim"],
+                box.append(Gtk.Label(label=_("Fehlt auf dem Server"), xalign=0, css_classes=["section-title"], margin_start=28, margin_top=22, margin_bottom=4))
+                box.append(Gtk.Label(label=_("Diese Titel stehen in der Playlist, liegen aber nicht auf deinem Server."), xalign=0, css_classes=["dim"],
                                      margin_start=28, margin_bottom=8))
                 miss = Gtk.ListBox(css_classes=["tracklist"], selection_mode=Gtk.SelectionMode.NONE, margin_start=28, margin_end=28)
                 miss_rows = []
@@ -622,7 +623,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
                     h = Gtk.Box(spacing=12, css_classes=["missing"])
                     h.append(label(re.sub(r"^\d+ · ", "", line), "title"))
                     h.get_first_child().set_hexpand(True)
-                    off = Gtk.Image.new_from_icon_name("weather-overcast-symbolic"); off.set_tooltip_text("Nirgends vorhanden"); off.add_css_class("dim")
+                    off = Gtk.Image.new_from_icon_name("weather-overcast-symbolic"); off.set_tooltip_text(_("Nirgends vorhanden")); off.add_css_class("dim")
                     h.append(off)
                     r = Gtk.ListBoxRow(child=h, activatable=False); miss.append(r); miss_rows.append(r)
                 if PRIVAT:
@@ -644,37 +645,37 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         if not self.server:
             return
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.append(Gtk.Label(label=f"Suchergebnisse für „{q}“", xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=8))
+        box.append(Gtk.Label(label=_("Suchergebnisse für „{q}“", q=q), xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=8))
         if PRIVAT:
             box.append(PRIVAT_UI.scope_bar(self, q))
             if self.search_scope == "net":
                 PRIVAT_UI.search_page(self, q, box)
                 self.sidebar.unselect_all()
-                self.nav.replace([self._page("Suchen", self._scroll(box))])
+                self.nav.replace([self._page(_("Suchen"), self._scroll(box))])
                 return
 
         def show(r):
             if not (r.artists or r.albums or r.tracks or r.playlists):
-                box.append(Adw.StatusPage(title="Keine Treffer", description=f"Auf deinem Server nichts zu „{q}“."))
+                box.append(Adw.StatusPage(title=_("Keine Treffer"), description=_("Auf deinem Server nichts zu „{q}“.", q=q)))
             if r.tracks:
-                box.append(Gtk.Label(label="Titel", xalign=0, css_classes=["section-title"], margin_start=28, margin_top=10, margin_bottom=6))
+                box.append(Gtk.Label(label=_("Titel"), xalign=0, css_classes=["section-title"], margin_start=28, margin_top=10, margin_bottom=6))
                 box.append(self.track_list(r.tracks[:12], show_art=True))
             if r.albums:
-                box.append(Gtk.Label(label="Alben", xalign=0, css_classes=["section-title"], margin_start=28, margin_top=18, margin_bottom=6))
+                box.append(Gtk.Label(label=_("Alben"), xalign=0, css_classes=["section-title"], margin_start=28, margin_top=18, margin_bottom=6))
                 grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True, max_children_per_line=12, column_spacing=22,
                                    row_spacing=22, margin_start=28, margin_end=28)
                 for a in r.albums:
                     grid.append(self.album_tile(a))
                 box.append(grid)
             if r.artists:
-                box.append(Gtk.Label(label="Interpreten", xalign=0, css_classes=["section-title"], margin_start=28, margin_top=18, margin_bottom=6))
+                box.append(Gtk.Label(label=_("Interpreten"), xalign=0, css_classes=["section-title"], margin_start=28, margin_top=18, margin_bottom=6))
                 flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=8, margin_start=28, margin_end=28)
                 for a in r.artists:
                     b = Gtk.Button(label=a.name, css_classes=["pill"]); b.connect("clicked", lambda w, a=a: self.push(self.artist_page(a.id)))
                     flow.append(b)
                 box.append(flow)
             if r.playlists:
-                box.append(Gtk.Label(label="Playlists", xalign=0, css_classes=["section-title"], margin_start=28, margin_top=18, margin_bottom=6))
+                box.append(Gtk.Label(label=_("Playlists"), xalign=0, css_classes=["section-title"], margin_start=28, margin_top=18, margin_bottom=6))
                 for p in r.playlists[:12]:
                     b = Gtk.Button(label=p.name, css_classes=["flat"], halign=Gtk.Align.START, margin_start=22)
                     b.connect("clicked", lambda w, p=p: self.push(self.playlist_page(p.id, p.name)))
@@ -682,16 +683,16 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
             box.append(Gtk.Box(height_request=30))
         run(lambda: self.server.search(q), show, self.toast)
         self.sidebar.unselect_all()
-        self.nav.replace([self._page("Suchen", self._scroll(box))])
+        self.nav.replace([self._page(_("Suchen"), self._scroll(box))])
 
     # ---------- queue & lyrics panel ----------
     def _queue_panel(self):
         self.panel_stack = Gtk.Stack()
         q = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         top = Gtk.Box(spacing=6, margin_start=10, margin_end=10, margin_top=10)
-        top.append(label("Als Nächstes", "section-title"))
+        top.append(label(_("Als Nächstes"), "section-title"))
         top.append(Gtk.Box(hexpand=True))
-        self.autoplay_btn = Gtk.ToggleButton(icon_name="media-playlist-consecutive-symbolic", tooltip_text="Autoplay – danach ähnliche Musik",
+        self.autoplay_btn = Gtk.ToggleButton(icon_name="media-playlist-consecutive-symbolic", tooltip_text=_("Autoplay – danach ähnliche Musik"),
                                              active=True, css_classes=["flat"])
         self.autoplay_btn.connect("toggled", lambda b: setattr(self.player, "autoplay", b.get_active()))
         top.append(self.autoplay_btn)
@@ -725,7 +726,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         up = self.player.upcoming()
         normal = [(p, t) for p, t in up if t.id not in self.player.autoplayed]
         auto = [(p, t) for p, t in up if t.id in self.player.autoplayed]
-        for title, items in (("", normal), ("Autoplay", auto)):
+        for title, items in (("", normal), (_("Autoplay"), auto)):
             if title and items:
                 hr = Gtk.ListBoxRow(activatable=False, selectable=False); hr.set_child(label(title, "queue-heading")); self.queue_list.append(hr)
             for p, t in items:
@@ -735,13 +736,13 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
                 col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, valign=Gtk.Align.CENTER)
                 col.append(label(t.title)); col.append(label(t.artist, "dim caption"))
                 h.append(col)
-                rm = Gtk.Button(icon_name="window-close-symbolic", css_classes=["flat", "circular"], tooltip_text="Entfernen", valign=Gtk.Align.CENTER)
+                rm = Gtk.Button(icon_name="window-close-symbolic", css_classes=["flat", "circular"], tooltip_text=_("Entfernen"), valign=Gtk.Align.CENTER)
                 rm.connect("clicked", lambda w, p=p: self.player.remove(p))
                 h.append(rm)
                 row.set_child(h)
                 self.queue_list.append(row)
         if not up:
-            self.queue_list.append(Gtk.ListBoxRow(child=label("Danach geht es mit Ähnlichem weiter." if self.player.autoplay else "Nichts mehr in der Warteschlange.",
+            self.queue_list.append(Gtk.ListBoxRow(child=label(_("Danach geht es mit Ähnlichem weiter.") if self.player.autoplay else _("Nichts mehr in der Warteschlange."),
                                                               "dim", wrap=True, lines=3), activatable=False))
 
     def show_lyrics(self, lines):
@@ -751,7 +752,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
             self.lyrics_box.remove(c)
         self._lyric_labels = []
         if not lines:
-            self.lyrics_box.append(label("Für diesen Titel gibt es keinen Liedtext.", "dim", wrap=True, lines=3))
+            self.lyrics_box.append(label(_("Für diesen Titel gibt es keinen Liedtext."), "dim", wrap=True, lines=3))
             return
         for ms, text in lines:
             l = label(text or "♪", "lyrics-line", wrap=True, lines=4)
@@ -766,7 +767,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         t = self.player.current
         self._syncing = True
         self.play_btn.set_icon_name("media-playback-pause-symbolic" if self.player.playing else "media-playback-start-symbolic")
-        self.play_btn.set_tooltip_text("Pause" if self.player.playing else "Wiedergabe")
+        self.play_btn.set_tooltip_text(_("Pause") if self.player.playing else _("Wiedergabe"))
         self.shuffle_btn.set_active(self.player.shuffle)
         self.repeat_btn.set_active(self.player.repeat != REPEAT_OFF)
         self.repeat_btn.set_icon_name("media-playlist-repeat-song-symbolic" if self.player.repeat == REPEAT_ONE else "media-playlist-repeat-symbolic")

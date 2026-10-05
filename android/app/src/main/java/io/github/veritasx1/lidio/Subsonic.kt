@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -21,7 +23,7 @@ object Http {
 
     private fun request(method: String, url: String, headers: Map<String, String>, body: String?, type: String = "application/json"): String {
         val connection = try { URL(url).openConnection() as HttpURLConnection }
-            catch (e: Exception) { throw ServerError("Die Adresse ist ungültig.", e) }
+            catch (e: Exception) { throw ServerError(tr("Die Adresse ist ungültig."), e) }
         try {
             connection.requestMethod = method
             connection.connectTimeout = 10_000
@@ -34,17 +36,17 @@ object Http {
                 connection.outputStream.use { it.write(body.toByteArray()) }
             }
             val code = connection.responseCode
-            if (code == 401 || code == 403) throw ServerError("Anmeldung abgelehnt – Benutzername oder Passwort stimmen nicht.")
-            if (code !in 200..299) throw ServerError("Der Server antwortet mit Fehler $code.")
+            if (code == 401 || code == 403) throw ServerError(tr("Anmeldung abgelehnt – Benutzername oder Passwort stimmen nicht."))
+            if (code !in 200..299) throw ServerError(tr("Der Server antwortet mit Fehler {code}.", "code" to code))
             return connection.inputStream.bufferedReader().use { it.readText() }
         } catch (e: ServerError) {
             throw e
         } catch (e: java.net.UnknownHostException) {
-            throw ServerError("Server nicht gefunden – Adresse prüfen.", e)
+            throw ServerError(tr("Server nicht gefunden – Adresse prüfen."), e)
         } catch (e: java.net.SocketTimeoutException) {
-            throw ServerError("Der Server antwortet nicht.", e)
+            throw ServerError(tr("Der Server antwortet nicht."), e)
         } catch (e: java.io.IOException) {
-            throw ServerError("Keine Verbindung zum Server.", e)
+            throw ServerError(tr("Keine Verbindung zum Server."), e)
         } finally {
             connection.disconnect()
         }
@@ -60,7 +62,7 @@ fun JSONObject.int(key: String): Int? = key(key).let { k -> if (has(k) && !isNul
 fun JSONObject.arr(key: String): JSONArray? = optJSONArray(key(key))
 fun JSONObject.obj(key: String): JSONObject? = optJSONObject(key(key))
 fun JSONObject.long(key: String): Long = optLong(key(key))
-fun JSONObject.id(): String = str("Id") ?: throw ServerError("Unerwartete Antwort vom Server.")
+fun JSONObject.id(): String = str("Id") ?: throw ServerError(tr("Unerwartete Antwort vom Server."))
 fun JSONArray?.objects(): List<JSONObject> = if (this == null) emptyList() else (0 until length()).map { getJSONObject(it) }
 
 /** Navidrome (and every Subsonic server) through the Subsonic API with token login – the password never travels in the clear. */
@@ -81,9 +83,9 @@ class SubsonicServer(base: String, private val user: String, private val passwor
         if (reply.optString("status") != "ok") {
             val error = reply.optJSONObject("error")
             throw when (error?.optInt("code")) {
-                40, 41 -> ServerError("Anmeldung abgelehnt – Benutzername oder Passwort stimmen nicht.")
-                70 -> ServerError("Nicht gefunden.")
-                else -> ServerError(error?.optString("message")?.takeIf { it.isNotEmpty() } ?: "Der Server hat abgelehnt.")
+                40, 41 -> ServerError(tr("Anmeldung abgelehnt – Benutzername oder Passwort stimmen nicht."))
+                70 -> ServerError(tr("Nicht gefunden."))
+                else -> ServerError(error?.optString("message")?.takeIf { it.isNotEmpty() } ?: tr("Der Server hat abgelehnt."))
             }
         }
         return reply
@@ -167,18 +169,18 @@ class SubsonicServer(base: String, private val user: String, private val passwor
         val chunks = tracks.map { it.id }.chunked(100)
         val reply = call("createPlaylist", "name" to name, *(chunks.firstOrNull() ?: emptyList()).map { "songId" to it }.toTypedArray())
         val id = reply.optJSONObject("playlist")?.str("id") ?: playlists().lastOrNull { it.name == name }?.id
-            ?: throw ServerError("Die Playlist wurde nicht angelegt.")
+            ?: throw ServerError(tr("Die Playlist wurde nicht angelegt."))
         chunks.drop(1).forEach { chunk -> call("updatePlaylist", "playlistId" to id, *chunk.map { "songIdToAdd" to it }.toTypedArray()) }
         return Playlist(id, name, tracks.size, tracks.sumOf { it.duration })
     }
 
-    private fun artist(j: JSONObject) = Artist(j.getString("id"), j.str("name") ?: "Unbekannt", j.optInt("albumCount"), j.str("coverArt"))
+    private fun artist(j: JSONObject) = Artist(j.getString("id"), j.str("name") ?: tr("Unbekannt"), j.optInt("albumCount"), j.str("coverArt"))
 
-    private fun album(j: JSONObject) = Album(j.getString("id"), j.str("name") ?: j.str("title") ?: "Unbekanntes Album",
-        j.str("artist") ?: "Unbekannt", j.str("artistId"), j.int("year")?.takeIf { it > 0 }, j.str("coverArt"),
+    private fun album(j: JSONObject) = Album(j.getString("id"), j.str("name") ?: j.str("title") ?: tr("Unbekanntes Album"),
+        j.str("artist") ?: tr("Unbekannt"), j.str("artistId"), j.int("year")?.takeIf { it > 0 }, j.str("coverArt"),
         j.optInt("songCount"), j.optInt("duration"), j.str("genre"), j.optBoolean("isCompilation"))
 
-    private fun track(j: JSONObject) = Track(j.getString("id"), j.str("title") ?: "Unbekannt", j.str("artist") ?: "Unbekannt",
+    private fun track(j: JSONObject) = Track(j.getString("id"), j.str("title") ?: tr("Unbekannt"), j.str("artist") ?: tr("Unbekannt"),
         j.str("album") ?: "", j.str("albumId"), j.optInt("duration"), j.int("track"), j.int("discNumber"), j.int("year")?.takeIf { it > 0 },
         j.str("coverArt"), j.str("path"), j.optLong("size"), j.str("suffix"), favorite = j.has("starred"))
 

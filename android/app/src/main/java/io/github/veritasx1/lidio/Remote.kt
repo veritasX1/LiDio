@@ -1,10 +1,12 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.util.Base64
 import org.json.JSONObject
 
 /** Where a playlist comes from – shown as a small mark next to it (card 561fa339). */
-enum class Source(val label: String) { Server("Server"), Deezer("Deezer"), Spotify("Spotify") }
+enum class Source(val label: String) { Server(tr("Server")), Deezer("Deezer"), Spotify("Spotify") }
 
 /** A public playlist elsewhere: shown, and on "Übertragen" compared with the own server like an imported list. */
 data class RemoteList(val source: Source, val id: String, val name: String, val owner: String = "", val count: Int = 0, val cover: String? = null)
@@ -21,7 +23,7 @@ class DeezerPlaylists(private val base: String = "https://api.deezer.com") : Pub
 
     private fun get(url: String): JSONObject {
         val json = JSONObject(Http.get(url))
-        json.optJSONObject("error")?.let { throw ServerError("Deezer: ${it.optString("message").ifEmpty { "Fehler" }}") }
+        json.optJSONObject("error")?.let { throw ServerError(tr("Deezer: {name}", "name" to (it.optString("message").ifEmpty { "Fehler" }))) }
         return json
     }
 
@@ -65,7 +67,7 @@ class SpotifyPlaylists(private val clientId: String, private val secret: String,
     private fun bearer(): String = token ?: run {
         val basic = Base64.encodeToString("$clientId:$secret".toByteArray(), Base64.NO_WRAP)
         val reply = JSONObject(Http.form("$accounts/api/token", "grant_type=client_credentials", mapOf("Authorization" to "Basic $basic")))
-        (reply.str("access_token") ?: throw ServerError("Spotify hat die Client-ID abgelehnt.")).also { token = it }
+        (reply.str("access_token") ?: throw ServerError(tr("Spotify hat die Client-ID abgelehnt."))).also { token = it }
     }
 
     private fun get(url: String) = JSONObject(Http.get(url, mapOf("Authorization" to "Bearer ${bearer()}")))
@@ -100,9 +102,9 @@ object SpotifyEmbed {
     fun read(id: String): Pair<RemoteList, List<Wanted>> {
         val html = Http.get("https://open.spotify.com/embed/playlist/${Http.encode(id)}", mapOf("User-Agent" to "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36"))
         val data = Regex("""<script id="__NEXT_DATA__" type="application/json">(.*?)</script>""", RegexOption.DOT_MATCHES_ALL).find(html)?.groupValues?.get(1)
-            ?: throw ServerError("Spotify hat die Playlist nicht gezeigt.")
+            ?: throw ServerError(tr("Spotify hat die Playlist nicht gezeigt."))
         val e = JSONObject(data).optJSONObject("props")?.optJSONObject("pageProps")?.optJSONObject("state")?.optJSONObject("data")?.optJSONObject("entity")
-            ?: throw ServerError("Spotify hat die Playlist nicht gezeigt.")
+            ?: throw ServerError(tr("Spotify hat die Playlist nicht gezeigt."))
         val tracks = e.optJSONArray("trackList").objects().map { t -> Wanted(t.optString("title"), t.optString("subtitle").replace("\u00a0", " "), "", t.optInt("duration") / 1000) }
         val cover = e.optJSONObject("coverArt")?.optJSONArray("sources").objects().maxByOrNull { it.optInt("width") }?.str("url")
         return RemoteList(Source.Spotify, id, e.optString("name").ifEmpty { e.optString("title") }, e.optString("subtitle"), tracks.size, cover) to tracks
@@ -124,7 +126,7 @@ object RemoteTracks {
             }
             else -> {}
         }
-        throw ServerError(if (source == null) "${list.source.label} ist ausgeschaltet (Mediathek → Server)." else "${list.source.label} hat die Playlist nicht geliefert.")
+        throw ServerError(if (source == null) tr("{label} ist ausgeschaltet (Mediathek → Server).", "label" to list.source.label) else tr("{label} hat die Playlist nicht geliefert.", "label" to list.source.label))
     }
 }
 

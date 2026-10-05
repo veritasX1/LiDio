@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -94,7 +96,7 @@ fun ListRow(title: String, subtitle: String? = null, onClick: (() -> Unit)? = nu
             inset: Dp = 16.dp, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null) {
     val ink = Ink
     Row(modifier.fillMaxWidth().then(if (onClick != null) Modifier.combinedClickable(role = Role.Button, onClick = onClick,
-            onLongClick = onLongClick, onLongClickLabel = if (onLongClick != null) "Mehr" else null) else Modifier)
+            onLongClick = onLongClick, onLongClickLabel = if (onLongClick != null) tr("Mehr") else null) else Modifier)
         .padding(start = inset), verticalAlignment = Alignment.CenterVertically) {
         leading?.let { it(); Box(Modifier.width(12.dp)) }
         Box(Modifier.weight(1f)) {

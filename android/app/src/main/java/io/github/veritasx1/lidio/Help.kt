@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Typeface
@@ -59,48 +61,48 @@ data class Chapter(val title: String, val paragraphs: List<String>)
 
 object Guide {
     fun chapters(): List<Chapter> = buildList {
-        add(Chapter("Was LiDio macht", listOf(
-            "LiDio spielt deine eigene Musik – von deinem Musikserver zu Hause (Emby, Jellyfin oder Navidrome) oder aus Ordnern auf diesem Handy. " +
-                "Es sieht aus und funktioniert wie die Musik-App auf dem iPhone, nur ohne Abo und ohne Apple.",
-            "LiDio kostet nichts, zeigt keine Werbung und verkauft nichts. Es gibt kein LiDio-Konto.")))
-        add(Chapter("Server verbinden", listOf(
-            "Beim ersten Start trägst du die Adresse deines Servers ein, dazu Benutzername und Passwort – dieselben wie in der Weboberfläche des Servers.",
-            "„Unterwegs“ ist eine zweite Adresse für außer Haus (zum Beispiel deine goip.de-Adresse). Im WLAN nimmt LiDio die schnelle Adresse, sonst die zweite – von selbst.",
-            "Weitere Server oder Ordner auf dem Handy fügst du unter Mediathek → Server-Symbol oben rechts hinzu.")))
-        add(Chapter("Start, Mediathek, Suchen", listOf(
-            "Unten schwebt die Leiste: Start (Zuletzt gespielt, Neu hinzugefügt, Mixe für dich), Mediathek (Playlists, Interpreten, Alben, Titel, Lieblingstitel) " +
-                "und rechts die Lupe für die Suche. Beim Herunterscrollen wird die Leiste klein; hochscrollen holt sie zurück.",
-            "Halte ein Album oder eine Playlist gedrückt: Wiedergabe, Zufall, Als Nächstes, Zur Playlist hinzufügen oder Anheften. Angeheftetes steht oben in der Mediathek.",
-            "Einen Titel nach rechts wischen spielt ihn als Nächstes, nach links kommt er ans Ende der Warteschlange. Gedrückt halten öffnet sein Menü.")))
-        add(Chapter("Jetzt läuft", listOf(
-            "Tippe auf den kleinen Player unten. Nach unten wischen schließt „Jetzt läuft“ wieder.",
-            "Neben dem Titel: ★ macht ihn zum Lieblingstitel (auf deinem Server gespeichert), ••• öffnet Teilen, Zum Album und Ausgabegerät (Bluetooth, Lautsprecher).",
-            "Unten links die Sprechblase: der Liedtext, falls es einen gibt. In der Mitte der Blitz: die Winamp-Ansicht. Rechts: die Warteschlange mit Zufall, " +
-                "Wiederholen und Autoplay (∞ – danach geht es mit ähnlicher Musik weiter). Titel ziehst du am Griff ≡ um, nach links wischen entfernt sie.")))
-        add(Chapter("Playlists", listOf(
-            "Playlists legst du über „Zur Playlist hinzufügen“ an, oder du importierst eine Liste (Mediathek → Playlists → +). LiDio gleicht sie mit deinem Server ab.",
-            "Titel, die dem Server fehlen, stehen grau an ihrer Stelle.",
-            "Oben rechts auf einer Playlist: Freigeben (für alle auf dem Server oder einzelne Personen, zum Hören oder Bearbeiten) und ↓ zum Laden aufs Handy.")))
-        add(Chapter("Ohne Netz hören", listOf(
-            "↓ an einem Album oder einer Playlist lädt sie aufs Handy. Was du hörst, behält LiDio auf Wunsch ebenfalls („Gehörtes behalten“). " +
-                "Beides findest du unter Mediathek → Geladen; entfernen per langem Druck.")))
+        add(Chapter(tr("Was LiDio macht"), listOf(
+            tr("LiDio spielt deine eigene Musik – von deinem Musikserver zu Hause (Emby, Jellyfin oder Navidrome) oder aus Ordnern auf diesem Handy. ") +
+                tr("Es sieht aus und funktioniert wie die Musik-App auf dem iPhone, nur ohne Abo und ohne Apple."),
+            tr("LiDio kostet nichts, zeigt keine Werbung und verkauft nichts. Es gibt kein LiDio-Konto."))))
+        add(Chapter(tr("Server verbinden"), listOf(
+            tr("Beim ersten Start trägst du die Adresse deines Servers ein, dazu Benutzername und Passwort – dieselben wie in der Weboberfläche des Servers."),
+            tr("„Unterwegs“ ist eine zweite Adresse für außer Haus (zum Beispiel deine goip.de-Adresse). Im WLAN nimmt LiDio die schnelle Adresse, sonst die zweite – von selbst."),
+            tr("Weitere Server oder Ordner auf dem Handy fügst du unter Mediathek → Server-Symbol oben rechts hinzu."))))
+        add(Chapter(tr("Start, Mediathek, Suchen"), listOf(
+            tr("Unten schwebt die Leiste: Start (Zuletzt gespielt, Neu hinzugefügt, Mixe für dich), Mediathek (Playlists, Interpreten, Alben, Titel, Lieblingstitel) ") +
+                tr("und rechts die Lupe für die Suche. Beim Herunterscrollen wird die Leiste klein; hochscrollen holt sie zurück."),
+            tr("Halte ein Album oder eine Playlist gedrückt: Wiedergabe, Zufall, Als Nächstes, Zur Playlist hinzufügen oder Anheften. Angeheftetes steht oben in der Mediathek."),
+            tr("Einen Titel nach rechts wischen spielt ihn als Nächstes, nach links kommt er ans Ende der Warteschlange. Gedrückt halten öffnet sein Menü."))))
+        add(Chapter(tr("Jetzt läuft"), listOf(
+            tr("Tippe auf den kleinen Player unten. Nach unten wischen schließt „Jetzt läuft“ wieder."),
+            tr("Neben dem Titel: ★ macht ihn zum Lieblingstitel (auf deinem Server gespeichert), ••• öffnet Teilen, Zum Album und Ausgabegerät (Bluetooth, Lautsprecher)."),
+            tr("Unten links die Sprechblase: der Liedtext, falls es einen gibt. In der Mitte der Blitz: die Winamp-Ansicht. Rechts: die Warteschlange mit Zufall, ") +
+                tr("Wiederholen und Autoplay (∞ – danach geht es mit ähnlicher Musik weiter). Titel ziehst du am Griff ≡ um, nach links wischen entfernt sie."))))
+        add(Chapter(tr("Playlists"), listOf(
+            tr("Playlists legst du über „Zur Playlist hinzufügen“ an, oder du importierst eine Liste (Mediathek → Playlists → +). LiDio gleicht sie mit deinem Server ab."),
+            tr("Titel, die dem Server fehlen, stehen grau an ihrer Stelle."),
+            tr("Oben rechts auf einer Playlist: Freigeben (für alle auf dem Server oder einzelne Personen, zum Hören oder Bearbeiten) und ↓ zum Laden aufs Handy."))))
+        add(Chapter(tr("Ohne Netz hören"), listOf(
+            tr("↓ an einem Album oder einer Playlist lädt sie aufs Handy. Was du hörst, behält LiDio auf Wunsch ebenfalls („Gehörtes behalten“). ") +
+                tr("Beides findest du unter Mediathek → Geladen; entfernen per langem Druck."))))
         Variant.helpChapter()?.let { add(it) }
         add(Chapter("Winamp", listOf(
-            "Der Blitz in „Jetzt läuft“ schaltet in die Winamp-2-Ansicht mit Equalizer, Spektrum und Playlist; der Blitz oben links im Winamp-Fenster wieder zurück.",
-            "Skins wählst du unter Einstellungen → Darstellung → Winamp-Skin, auch aus dem Skin-Museum mit über 90 000 Skins.")))
-        add(Chapter("Datenschutz", privacy()))
+            tr("Der Blitz in „Jetzt läuft“ schaltet in die Winamp-2-Ansicht mit Equalizer, Spektrum und Playlist; der Blitz oben links im Winamp-Fenster wieder zurück."),
+            tr("Skins wählst du unter Einstellungen → Darstellung → Winamp-Skin, auch aus dem Skin-Museum mit über 90 000 Skins."))))
+        add(Chapter(tr("Datenschutz"), privacy()))
     }
 
     /** Exactly the connections LiDio makes – nothing else leaves the phone. */
     fun privacy(): List<String> = buildList {
-        add("LiDio sammelt nichts über dich, hat keine Werbung, keine Statistik und keine Tracker. Es gibt keine Käufe und keine Abos.")
-        add("Verbindungen gehen nur dorthin, wo du sie auslöst: zu deinem eigenen Server (Musik, Cover, Playlists, Favoriten).")
-        add("Zum Skin-Museum (skins.webamp.org) nur, solange die Skin-Auswahl offen ist. Zu Deezer nur, wenn du die Deezer-Suche einschaltest; " +
-            "zu Spotify nur mit deiner eigenen Spotify-App (Client-ID).")
-        add(if (Variant.PRIVATE) "Liedtexte: Titel und Interpret gehen an lrclib.net (frei, ohne Konto), wenn dein Server keinen Text hat."
-            else "Liedtexte: nur wenn du „Liedtexte aus dem Netz“ einschaltest, gehen Titel und Interpret an lrclib.net (frei, ohne Konto).")
+        add(tr("LiDio sammelt nichts über dich, hat keine Werbung, keine Statistik und keine Tracker. Es gibt keine Käufe und keine Abos."))
+        add(tr("Verbindungen gehen nur dorthin, wo du sie auslöst: zu deinem eigenen Server (Musik, Cover, Playlists, Favoriten)."))
+        add(tr("Zum Skin-Museum (skins.webamp.org) nur, solange die Skin-Auswahl offen ist. Zu Deezer nur, wenn du die Deezer-Suche einschaltest; ") +
+            tr("zu Spotify nur mit deiner eigenen Spotify-App (Client-ID)."))
+        add(if (Variant.PRIVATE) tr("Liedtexte: Titel und Interpret gehen an lrclib.net (frei, ohne Konto), wenn dein Server keinen Text hat.")
+            else tr("Liedtexte: nur wenn du „Liedtexte aus dem Netz“ einschaltest, gehen Titel und Interpret an lrclib.net (frei, ohne Konto)."))
         Variant.text("datenschutz").takeIf { it.isNotEmpty() }?.let { add(it) }
-        add("Dein Server-Zugang liegt verschlüsselt auf diesem Gerät. Sicherungen von Android enthalten LiDio nicht.")
+        add(tr("Dein Server-Zugang liegt verschlüsselt auf diesem Gerät. Sicherungen von Android enthalten LiDio nicht."))
     }
 
     /** The guide as a PDF (A4) – same text as in the app. */
@@ -117,9 +119,9 @@ object Guide {
         var number = 0
         var page: PdfDocument.Page? = null
         var y = 0f
-        val name = if (Variant.PRIVATE) "LiDio privat" else "LiDio"
+        val name = if (Variant.PRIVATE) tr("LiDio privat") else "LiDio"
         fun finish() { page?.let { p ->
-            if (number > 1) p.canvas.drawText("$name – Anleitung · Seite $number", margin, height - 32f, paint(8f, false, grey = true))
+            if (number > 1) p.canvas.drawText(tr("{name} – Anleitung · Seite {number}", "name" to name, "number" to number), margin, height - 32f, paint(8f, false, grey = true))
             document.finishPage(p) } }
         fun newPage() { finish(); number++; page = document.startPage(PdfDocument.PageInfo.Builder(width, height, number).create()); y = margin }
         fun place(text: String, p: TextPaint, before: Float) {
@@ -131,8 +133,8 @@ object Guide {
         }
         val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
         place(name, paint(30f, true), 120f)
-        place("Anleitung · Version $version", paint(11f, false, grey = true), 24f)
-        place("Ohne Abo, ohne Werbung, ohne Datensammlung.", paint(11f, false, grey = true), 6f)
+        place(tr("Anleitung · Version {version}", "version" to version), paint(11f, false, grey = true), 24f)
+        place(tr("Ohne Abo, ohne Werbung, ohne Datensammlung."), paint(11f, false, grey = true), 6f)
         chapters().forEachIndexed { index, chapter ->
             if (index == 0) newPage()
             place("${index + 1}  ${chapter.title}", paint(16f, true), if (y > margin) 26f else 0f)
@@ -194,19 +196,19 @@ fun GuideScreen(state: AppState) {
                 chapter.paragraphs.forEach { p -> item { Label(p, 17f, lines = 30, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp)) } }
                 val next = open!! + 1
                 if (next < chapters.size) item {
-                    Label("Weiter: ${chapters[next].title} ›", 17f, color = ink.tint, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 28.dp)
+                    Label(tr("Weiter: {value} ›", "value" to (chapters[next].title)), 17f, color = ink.tint, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 28.dp)
                         .clickable(role = Role.Button) { open = next }.padding(vertical = 6.dp))
                 }
-                item { Label("‹ Alle Kapitel", 17f, color = ink.tint, modifier = Modifier.padding(start = 20.dp, top = 12.dp).clickable(role = Role.Button) { open = null }.padding(vertical = 6.dp)) }
+                item { Label(tr("‹ Alle Kapitel"), 17f, color = ink.tint, modifier = Modifier.padding(start = 20.dp, top = 12.dp).clickable(role = Role.Button) { open = null }.padding(vertical = 6.dp)) }
             } else {
-                largeTitle("Anleitung", topInset = false)
+                largeTitle(tr("Anleitung"), topInset = false)
                 item {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
-                        ListRow("Rundgang starten", onClick = { state.tour = 0; state.stacks.clear(); state.tab = Tab.Start }, titleColor = ink.tint, separator = false)
+                        ListRow(tr("Rundgang starten"), onClick = { state.tour = 0; state.stacks.clear(); state.tab = Tab.Start }, titleColor = ink.tint, separator = false)
                     }
-                    Label("Zeigt dir die wichtigsten Knöpfe – eine Minute.", 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, end = 32.dp))
+                    Label(tr("Zeigt dir die wichtigsten Knöpfe – eine Minute."), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, end = 32.dp))
                 }
-                item { Label("KAPITEL", 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, top = 24.dp, bottom = 6.dp)) }
+                item { Label(tr("KAPITEL"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, top = 24.dp, bottom = 6.dp)) }
                 item {
                     Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
                         chapters.forEachIndexed { i, c -> ListRow("${i + 1}. ${c.title}", onClick = { open = i }, separator = i < chapters.lastIndex, trailing = { Chevron() }) }
@@ -214,21 +216,21 @@ fun GuideScreen(state: AppState) {
                 }
                 item {
                     Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
-                        ListRow("Anleitung als PDF sichern", onClick = {
+                        ListRow(tr("Anleitung als PDF sichern"), onClick = {
                             val uri = Guide.savePdf(context, Guide.pdf(context))
-                            state.notice = if (uri != null) "Gesichert in „Downloads/LiDio“." else "Das PDF ließ sich nicht sichern."
+                            state.notice = if (uri != null) "Gesichert in „Downloads/LiDio“." else tr("Das PDF ließ sich nicht sichern.")
                         }, titleColor = ink.tint, separator = false)
                     }
-                    Label("Zum Ausdrucken oder Lesen am Computer.", 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, end = 32.dp))
+                    Label(tr("Zum Ausdrucken oder Lesen am Computer."), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, end = 32.dp))
                 }
-                item { Label("HINWEISE", 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, top = 24.dp, bottom = 6.dp)) }
+                item { Label(tr("HINWEISE"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, top = 24.dp, bottom = 6.dp)) }
                 item {
                     Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card).padding(vertical = 6.dp)) {
                         Segmented(HelpLevel.entries.map { it.label }, level.ordinal, Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
                             level = HelpLevel.entries[it]; Help.setLevel(context, level)
                         }
                     }
-                    Label("Kurze Hinweise beim ersten Benutzen, etwa „nach unten wischen schließt“ – immer, einmal oder nie.", 13f, color = ink.secondary, lines = 3,
+                    Label(tr("Kurze Hinweise beim ersten Benutzen, etwa „nach unten wischen schließt“ – immer, einmal oder nie."), 13f, color = ink.secondary, lines = 3,
                         modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp, bottom = 24.dp))
                 }
             }
@@ -249,14 +251,14 @@ data class TourStep(val anchor: String?, val title: String, val text: String)
 
 object Tour {
     fun steps(): List<TourStep> = listOfNotNull(
-        TourStep(null, "Willkommen bei ${if (Variant.PRIVATE) "LiDio privat" else "LiDio"}", "Deine Musik wie auf dem iPhone – ohne Abo. Ein kurzer Rundgang zeigt dir die wichtigsten Stellen."),
-        TourStep("start", "Start", "Zuletzt gespielt, Neues und Mixe für dich."),
-        TourStep("mediathek", "Mediathek", "Playlists, Interpreten, Alben, Titel und Lieblingstitel. Oben rechts das Server-Symbol: Server und Einstellungen."),
-        TourStep("suchen", "Suchen", Variant.text("rundgang-suchen").ifEmpty { "Interpreten, Alben, Titel und Playlists – vor dem Tippen Genres zum Stöbern." }),
-        TourStep("miniplayer", "Was gerade läuft", "Antippen öffnet „Jetzt läuft“ mit Liedtext, Warteschlange und der Winamp-Ansicht (Blitz)."),
-        TourStep(null, "Gesten", "Album oder Playlist gedrückt halten öffnet ein Menü. Titel nach rechts wischen: als Nächstes, nach links: ans Ende. " +
-            "„Jetzt läuft“ nach unten wischen schließt es."),
-        TourStep(null, "Hilfe", "Die ganze Anleitung findest du unter Mediathek → Server-Symbol → Anleitung – auch als PDF."),
+        TourStep(null, tr("Willkommen bei {if}", "if" to (if (Variant.PRIVATE) "LiDio privat" else "LiDio")), tr("Deine Musik wie auf dem iPhone – ohne Abo. Ein kurzer Rundgang zeigt dir die wichtigsten Stellen.")),
+        TourStep("start", tr("Start"), tr("Zuletzt gespielt, Neues und Mixe für dich.")),
+        TourStep("mediathek", tr("Mediathek"), tr("Playlists, Interpreten, Alben, Titel und Lieblingstitel. Oben rechts das Server-Symbol: Server und Einstellungen.")),
+        TourStep("suchen", tr("Suchen"), Variant.text("rundgang-suchen").ifEmpty { tr("Interpreten, Alben, Titel und Playlists – vor dem Tippen Genres zum Stöbern.") }),
+        TourStep("miniplayer", tr("Was gerade läuft"), tr("Antippen öffnet „Jetzt läuft“ mit Liedtext, Warteschlange und der Winamp-Ansicht (Blitz).")),
+        TourStep(null, "Gesten", tr("Album oder Playlist gedrückt halten öffnet ein Menü. Titel nach rechts wischen: als Nächstes, nach links: ans Ende. ") +
+            tr("„Jetzt läuft“ nach unten wischen schließt es.")),
+        TourStep(null, tr("Hilfe"), tr("Die ganze Anleitung findest du unter Mediathek → Server-Symbol → Anleitung – auch als PDF.")),
     )
 }
 
@@ -291,9 +293,9 @@ fun TourOverlay(index: Int, anchors: Map<String, Rect>, onNext: () -> Unit, onSk
             Label(step.title, 20f, 700, modifier = Modifier.semantics { heading() })
             Label(step.text, 15f, lines = 8, modifier = Modifier.padding(top = 6.dp))
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Label("${index + 1} von ${steps.size}", 13f, color = ink.secondary, tabular = true, modifier = Modifier.weight(1f))
+                Label(tr("{value} von {size}", "value" to (index + 1), "size" to steps.size), 13f, color = ink.secondary, tabular = true, modifier = Modifier.weight(1f))
                 if (index < steps.lastIndex) Label("Überspringen", 17f, color = ink.secondary, modifier = Modifier.padding(end = 16.dp).clickable(role = Role.Button, onClick = onSkip).padding(4.dp))
-                Label(if (index == steps.lastIndex) "Fertig" else "Weiter", 17f, 600, ink.tint, Modifier.clickable(role = Role.Button, onClick = onNext).padding(4.dp))
+                Label(if (index == steps.lastIndex) tr("Fertig") else tr("Weiter"), 17f, 600, ink.tint, Modifier.clickable(role = Role.Button, onClick = onNext).padding(4.dp))
             }
         }
     }

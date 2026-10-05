@@ -6,6 +6,7 @@ from gi.repository import GLib, Gtk, Gdk, Pango
 
 from .covers import Cover, load
 from .player import REPEAT_OFF, REPEAT_ONE
+from .i18n import _
 
 
 class NowPlaying(Gtk.Overlay):
@@ -36,11 +37,11 @@ class NowPlaying(Gtk.Overlay):
             b = Gtk.Button(icon_name=icon, tooltip_text=tip, css_classes=["flat", "circular", css]); b.connect("clicked", lambda *_: cb())
             b.update_property([Gtk.AccessibleProperty.LABEL], [tip])
             controls.append(b); return b
-        self.shuffle = button("media-playlist-shuffle-symbolic", "Zufall", self.player.toggle_shuffle)
-        button("media-skip-backward-symbolic", "Zurück", self.player.previous)
-        self.play = button("media-playback-start-symbolic", "Wiedergabe", self.player.toggle, "np-play")
-        button("media-skip-forward-symbolic", "Weiter", self.player.next)
-        self.repeat = button("media-playlist-repeat-symbolic", "Wiederholen", self.player.cycle_repeat)
+        self.shuffle = button("media-playlist-shuffle-symbolic", _("Zufall"), self.player.toggle_shuffle)
+        button("media-skip-backward-symbolic", _("Zurück"), self.player.previous)
+        self.play = button("media-playback-start-symbolic", _("Wiedergabe"), self.player.toggle, "np-play")
+        button("media-skip-forward-symbolic", _("Weiter"), self.player.next)
+        self.repeat = button("media-playlist-repeat-symbolic", _("Wiederholen"), self.player.cycle_repeat)
         left.append(controls)
         vol = Gtk.Box(spacing=8, margin_top=10)
         vol.append(Gtk.Image.new_from_icon_name("audio-volume-low-symbolic"))
@@ -60,12 +61,12 @@ class NowPlaying(Gtk.Overlay):
         from .window import PRIVAT
         if PRIVAT:
             # Optional extension: a music video for the title.
-            vid = Gtk.Button(icon_name="video-display-symbolic", tooltip_text="Musikvideo", css_classes=["circular", "np-close"],
+            vid = Gtk.Button(icon_name="video-display-symbolic", tooltip_text=_("Musikvideo"), css_classes=["circular", "np-close"],
                              halign=Gtk.Align.END, valign=Gtk.Align.START, margin_end=18, margin_top=18)
             from .window import PRIVAT_UI
             vid.connect("clicked", lambda *_: self.player.current and PRIVAT_UI.VideoWindow(window, self.player.current).present())
             self.add_overlay(vid)
-        close = Gtk.Button(icon_name="go-down-symbolic", tooltip_text="Schließen (Esc)", css_classes=["circular", "np-close"],
+        close = Gtk.Button(icon_name="go-down-symbolic", tooltip_text=_("Schließen (Esc)"), css_classes=["circular", "np-close"],
                            halign=Gtk.Align.START, valign=Gtk.Align.START, margin_start=18, margin_top=18)
         close.connect("clicked", lambda *_: window.close_now_playing())
         self.add_overlay(close)

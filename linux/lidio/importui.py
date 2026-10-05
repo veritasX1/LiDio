@@ -8,6 +8,7 @@ from gi.repository import Adw, Gio, GLib, Gtk, Gdk
 
 from . import importing as I
 from .covers import Cover
+from .i18n import _
 
 
 def _label(text, css=None, **kw):
@@ -31,14 +32,14 @@ class ImportMixin:
     def web_lists_page(self):
         from .window import run
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.append(Gtk.Label(label="Playlists im Netz", xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=4))
-        box.append(Gtk.Label(label="Öffentliche Playlists von Deezer" + (" und Spotify" if len(self.remote_sources()) > 1 else "") +
-                             " ansehen und mit deinem Server abgleichen – geladen wird nichts.", xalign=0, wrap=True, css_classes=["dim"],
+        box.append(Gtk.Label(label=_("Playlists im Netz"), xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=4))
+        box.append(Gtk.Label(label=_("Öffentliche Playlists von Deezer") + (_(" und Spotify") if len(self.remote_sources()) > 1 else "") +
+                             _(" ansehen und mit deinem Server abgleichen – geladen wird nichts."), xalign=0, wrap=True, css_classes=["dim"],
                              margin_start=28, margin_end=28, margin_bottom=10))
         bar = Gtk.Box(spacing=8, margin_start=28, margin_end=28, margin_bottom=12)
-        entry = Gtk.SearchEntry(placeholder_text="Playlist suchen oder Link einfügen", hexpand=True)
+        entry = Gtk.SearchEntry(placeholder_text=_("Playlist suchen oder Link einfügen"), hexpand=True)
         bar.append(entry)
-        imp = Gtk.Button(label="Aus Datei …", css_classes=["flat", "red-text"]); imp.connect("clicked", lambda *_: self.choose_import_file())
+        imp = Gtk.Button(label=_("Aus Datei …"), css_classes=["flat", "red-text"]); imp.connect("clicked", lambda *_: self.choose_import_file())
         bar.append(imp)
         box.append(bar)
         results = Gtk.Box(orientation=Gtk.Orientation.VERTICAL); box.append(results)
@@ -48,7 +49,7 @@ class ImportMixin:
             while (c := results.get_first_child()) is not None:
                 results.remove(c)
             if not found:
-                results.append(Adw.StatusPage(title="Keine Playlists", description=f"Nichts zu „{state['q']}“ gefunden."))
+                results.append(Adw.StatusPage(title=_("Keine Playlists"), description=_("Nichts zu „{value}“ gefunden.", value=state['q'])))
                 return
             grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True, max_children_per_line=12, min_children_per_line=2,
                                column_spacing=22, row_spacing=22, margin_start=28, margin_end=28, margin_bottom=28, valign=Gtk.Align.START)
@@ -83,7 +84,7 @@ class ImportMixin:
             state["timer"] = GLib.timeout_add(400, search)
         entry.connect("search-changed", changed)
         GLib.idle_add(lambda: (entry.grab_focus(), False)[1])
-        return self._page("Playlists im Netz", self._scroll(box))
+        return self._page(_("Playlists im Netz"), self._scroll(box))
 
     def _remote_tile(self, rl):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, width_request=180)
@@ -115,7 +116,7 @@ class ImportMixin:
                     # Optional extension: Spotify lists without an own key.
                     meta2, wanted = PRIVAT.spotify_embed(rl.id)
                     return (meta2 if not rl.name else rl), wanted
-                raise I.ServerError("Für Spotify fehlt dein eigener Spotify-Schlüssel (Menü → Einstellungen).")
+                raise I.ServerError(_("Für Spotify fehlt dein eigener Spotify-Schlüssel (Menü → Einstellungen)."))
             return meta, src.tracks(rl.id)
 
         def show(r):
@@ -125,7 +126,7 @@ class ImportMixin:
             cover = Cover(220, 10); cover.show(meta.cover); head.append(cover)
             info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, valign=Gtk.Align.END, hexpand=True)
             info.append(_label(meta.name, "album-title", wrap=True, lines=2))
-            info.append(_label(f"{meta.source}" + (f" · {meta.owner}" if meta.owner else "") + f" · {len(wanted)} Titel", "dim"))
+            info.append(_label(f"{meta.source}" + (f" · {meta.owner}" if meta.owner else "") + _(" · {count} Titel", count=len(wanted)), "dim"))
             row = Gtk.Box(spacing=12, margin_top=14)
             status = _label("", "dim caption")
             matched = {}
@@ -137,16 +138,16 @@ class ImportMixin:
                     tracks = [res.track for res in results[start:] if res.match == I.FOUND and res.track]
                     if tracks:
                         self.player.play(server, tracks, shuffled=shuffled)
-                        status.set_text(f"{len(tracks)} von {len(wanted) - start} Titeln auf deinem Server")
+                        status.set_text(_("{count} von {value} Titeln auf deinem Server", count=len(tracks), value=len(wanted) - start))
                     else:
-                        self.toast("Keiner dieser Titel liegt auf deinem Server.")
-                status.set_text("Sucht auf deinem Server …")
+                        self.toast(_("Keiner dieser Titel liegt auf deinem Server."))
+                status.set_text(_("Sucht auf deinem Server …"))
                 run(lambda: I.match(server, wanted[start:]) if not matched else [matched[i] for i in range(start, len(wanted))], go, self.toast)
-            for text, sh in (("▶  Wiedergabe", False), ("⤮  Zufall", True)):
+            for text, sh in ((_("▶  Wiedergabe"), False), (_("⤮  Zufall"), True)):
                 b = Gtk.Button(css_classes=["red-button"]); b.set_child(Gtk.Label(label=text)); b.connect("clicked", lambda *_, sh=sh: play(sh)); row.append(b)
             row.append(Gtk.Box(hexpand=True))
             send = Gtk.Button(icon_name="network-server-symbolic", css_classes=["flat", "circular", "download-button"], valign=Gtk.Align.CENTER,
-                              tooltip_text="Als Playlist auf deinen Server übertragen")
+                              tooltip_text=_("Als Playlist auf deinen Server übertragen"))
             send.connect("clicked", lambda *_: self.push(self.import_page(wanted, meta.name, meta.cover, meta.link)))
             row.append(send)
             info.append(row); info.append(status)
@@ -173,7 +174,7 @@ class ImportMixin:
                     if res[0].match == I.FOUND and res[0].track:
                         self.player.play(server, [res[0].track])
                     else:
-                        self.toast(f"„{wanted[i]}“ liegt nicht auf deinem Server.")
+                        self.toast(_("„{value}“ liegt nicht auf deinem Server.", value=wanted[i]))
                 run(lambda: [matched[i]] if i in matched else I.match(server, [wanted[i]]), go, self.toast)
             lst.connect("row-activated", activated)
             box.append(lst); box.append(Gtk.Box(height_request=30))
@@ -182,7 +183,7 @@ class ImportMixin:
 
     # ---------- import ----------
     def choose_import_file(self):
-        d = Gtk.FileDialog(title="Playlist importieren")
+        d = Gtk.FileDialog(title=_("Playlist importieren"))
         f = Gtk.FileFilter(); f.set_name("Playlists (M3U, PLS, XSPF, CSV, Text)")
         for pat in ("*.m3u", "*.m3u8", "*.pls", "*.xspf", "*.csv", "*.txt"):
             f.add_pattern(pat)
@@ -197,7 +198,7 @@ class ImportMixin:
             name = file.get_basename() or "Playlist"
             wanted = I.read(data.decode("utf-8", "replace"), name) if ok else []
             if not wanted:
-                self.toast("In der Datei steht keine Playlist, die LiDio lesen kann."); return
+                self.toast(_("In der Datei steht keine Playlist, die LiDio lesen kann.")); return
             self.push(self.import_page(wanted, name.rsplit(".", 1)[0]))
         d.open(self, None, done)
 
@@ -207,17 +208,17 @@ class ImportMixin:
         from .window import run
         server = self.server
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.append(Gtk.Label(label="Playlist importieren", xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=8))
+        box.append(Gtk.Label(label=_("Playlist importieren"), xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=8))
         form = Adw.PreferencesGroup(margin_start=28, margin_end=28)
-        name_row = Adw.EntryRow(title="Name der Playlist", text=name or "")
+        name_row = Adw.EntryRow(title=_("Name der Playlist"), text=name or "")
         form.add(name_row)
         box.append(form)
-        counts = _label(f"{len(wanted)} Titel in der Liste", "dim"); counts.set_margin_start(28); counts.set_margin_top(12)
+        counts = _label(_("{count} Titel in der Liste", count=len(wanted)), "dim"); counts.set_margin_start(28); counts.set_margin_top(12)
         box.append(counts)
         actions = Gtk.Box(spacing=12, margin_start=28, margin_top=10, margin_bottom=10)
-        go = Gtk.Button(css_classes=["red-button"]); go.set_child(Gtk.Label(label=f"{len(wanted)} Titel mit dem Server abgleichen"))
+        go = Gtk.Button(css_classes=["red-button"]); go.set_child(Gtk.Label(label=_("{count} Titel mit dem Server abgleichen", count=len(wanted))))
         make = Gtk.Button(css_classes=["red-button"], visible=False)
-        copy = Gtk.Button(label="Fehlende kopieren", css_classes=["flat", "red-text"], visible=False)
+        copy = Gtk.Button(label=_("Fehlende kopieren"), css_classes=["flat", "red-text"], visible=False)
         actions.append(go); actions.append(make); actions.append(copy)
         box.append(actions)
         lst = Gtk.ListBox(css_classes=["boxed-list"], selection_mode=Gtk.SelectionMode.NONE, margin_start=28, margin_end=28, margin_bottom=30, visible=False)
@@ -230,8 +231,8 @@ class ImportMixin:
                 lst.remove(c)
             for i, r in enumerate(results):
                 sub = {I.FOUND: f"{getattr(r.track, 'artist', '')} – {getattr(r.track, 'title', '')}",
-                       I.UNSURE: f"Vielleicht: {getattr(r.track, 'artist', '')} – {getattr(r.track, 'title', '')} · klicken zum Wählen",
-                       I.MISSING: "Nicht auf dem Server"}[r.match]
+                       I.UNSURE: _("Vielleicht: {getattr} – {getattr2} · klicken zum Wählen", getattr=getattr(r.track, 'artist', ''), getattr2=getattr(r.track, 'title', '')),
+                       I.MISSING: _("Nicht auf dem Server")}[r.match]
                 row = Adw.ActionRow(title=GLib.markup_escape_text(str(r.wanted)), subtitle=GLib.markup_escape_text(sub))
                 icon, css = colors[r.match]
                 img = Gtk.Image.new_from_icon_name(icon); img.add_css_class(css); row.add_prefix(img)
@@ -241,7 +242,7 @@ class ImportMixin:
             f = sum(r.match == I.FOUND for r in results); u = sum(r.match == I.UNSURE for r in results); m = sum(r.match == I.MISSING for r in results)
             counts.set_markup(f"<span foreground='#34c759'>●</span> {f} gefunden   <span foreground='#ff9500'>●</span> {u} unsicher   "
                               f"<span foreground='#ff3b30'>●</span> {m} fehlen")
-            make.set_child(Gtk.Label(label=f"Als Playlist anlegen ({f + u} Titel)")); make.set_visible(True); make.set_sensitive(f + u > 0)
+            make.set_child(Gtk.Label(label=_("Als Playlist anlegen ({value} Titel)", value=f + u))); make.set_visible(True); make.set_sensitive(f + u > 0)
             copy.set_visible(m > 0); lst.set_visible(bool(results))
 
         def choose(i, widget):
@@ -251,7 +252,7 @@ class ImportMixin:
                 b = Gtk.Button(label=f"{t.artist} – {t.title}" + (f" · {t.album}" if t.album else ""), css_classes=["flat"]); b.get_child().set_xalign(0)
                 b.connect("clicked", lambda *_, t=t: (pop.popdown(), results.__setitem__(i, I.Result(r.wanted, I.FOUND, t, r.choices)), fill()))
                 col.append(b)
-            no = Gtk.Button(label="Weglassen", css_classes=["flat", "destructive-text"]); no.get_child().set_xalign(0)
+            no = Gtk.Button(label=_("Weglassen"), css_classes=["flat", "destructive-text"]); no.get_child().set_xalign(0)
             no.connect("clicked", lambda *_: (pop.popdown(), results.__setitem__(i, I.Result(r.wanted, I.MISSING, None, r.choices)), fill()))
             col.append(no)
             pop.set_child(col); pop.set_parent(widget)
@@ -262,19 +263,19 @@ class ImportMixin:
             go.set_sensitive(False)
 
             def progress(i):
-                GLib.idle_add(lambda: (go.get_child().set_text(f"Abgleich … {i + 1} von {len(wanted)}"), False)[1])
+                GLib.idle_add(lambda: (go.get_child().set_text(_("Abgleich … {value} von {count}", value=i + 1, count=len(wanted))), False)[1])
 
             def done(found):
                 results[:] = found; go.set_visible(False); fill()
             run(lambda: I.match(server, wanted, progress), done, lambda m: (go.set_sensitive(True), self.toast(m)))
         go.connect("clicked", compare)
-        copy.connect("clicked", lambda *_: (self.get_clipboard().set(I.missing_text(results)), self.toast("Fehlende Titel kopiert")))
+        copy.connect("clicked", lambda *_: (self.get_clipboard().set(I.missing_text(results)), self.toast(_("Fehlende Titel kopiert"))))
 
         def create(*_):
             tracks = [r.track for r in results if r.match != I.MISSING and r.track]
             missing = [f"{i + 1} · {r.wanted}" for i, r in enumerate(results) if r.match == I.MISSING]
             title = name_row.get_text().strip() or "Importiert"
-            make.set_sensitive(False); make.get_child().set_text("Wird angelegt …")
+            make.set_sensitive(False); make.get_child().set_text(_("Wird angelegt …"))
 
             def work():
                 made = server.create_playlist(title, tracks)
@@ -292,9 +293,9 @@ class ImportMixin:
                 return made
 
             def done(made):
-                self.toast(f"„{made.name}“ angelegt – {len(tracks)} Titel" + (f", {len(missing)} fehlen" if missing else ""))
+                self.toast(_("„{name}“ angelegt – {count} Titel", name=made.name, count=len(tracks)) + (_(", {count} fehlen", count=len(missing)) if missing else ""))
                 self.reload_playlists(select=made.id)
                 self.nav.replace([self.playlist_page(made.id, made.name)])
             run(work, done, lambda m: (make.set_sensitive(True), self.toast(m)))
         make.connect("clicked", create)
-        return self._page("Importieren", self._scroll(box))
+        return self._page(_("Importieren"), self._scroll(box))

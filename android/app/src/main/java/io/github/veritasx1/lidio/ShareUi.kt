@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
@@ -26,8 +28,8 @@ suspend fun shareTrack(context: Context, state: AppState, server: MusicServer, t
     val id = withContext(Dispatchers.IO) { state.shareId(account, server) }
     val shared = Shared.of(id, track)
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, shared.text())
-        .putExtra(Intent.EXTRA_SUBJECT, "„${track.title}“ in LiDio")
-    context.startActivity(Intent.createChooser(send, "Lied teilen").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        .putExtra(Intent.EXTRA_SUBJECT, tr("„{title}“ in LiDio", "title" to track.title))
+    context.startActivity(Intent.createChooser(send, tr("Lied teilen")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
 /** The context menu of a title (long press), like iOS: play next, play last, share, remove the download. */
@@ -43,22 +45,22 @@ fun TrackMenu(state: AppState, server: MusicServer, track: Track, onClose: () ->
                 Label(track.artist, 13f, color = ink.secondary)
             }
             Box(Modifier.fillMaxWidth().height(0.5.dp).background(ink.separator))
-            ListRow("Als Nächstes spielen", onClick = { state.playback.playNext(server, track); onClose() }, trailing = { SymbolIcon(Symbol.PlayNext, ink.label, 20.dp) })
-            ListRow("Zuletzt spielen", onClick = { state.playback.addToQueue(server, track); onClose() }, trailing = { SymbolIcon(Symbol.PlayLast, ink.label, 20.dp) })
+            ListRow(tr("Als Nächstes spielen"), onClick = { state.playback.playNext(server, track); onClose() }, trailing = { SymbolIcon(Symbol.PlayNext, ink.label, 20.dp) })
+            ListRow(tr("Zuletzt spielen"), onClick = { state.playback.addToQueue(server, track); onClose() }, trailing = { SymbolIcon(Symbol.PlayLast, ink.label, 20.dp) })
             var picking by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
             if (picking) { PlaylistPicker(state, server, listOf(track)) { picking = false; onClose() } }
-            ListRow("Zur Playlist hinzufügen …", onClick = { picking = true }, trailing = { SymbolIcon(Symbol.Playlists, ink.label, 20.dp) })
+            ListRow(tr("Zur Playlist hinzufügen …"), onClick = { picking = true }, trailing = { SymbolIcon(Symbol.Playlists, ink.label, 20.dp) })
             if (server.kind != ServerKind.Local && server.kind != ServerKind.Web && state.account?.let { Offline.stored(context, it.id, track) } == null)
-                ListRow("Aufs Telefon laden", onClick = { state.account?.let { Offline.download(context, it.id, server, listOf(track)) }; onClose() },
+                ListRow(tr("Aufs Telefon laden"), onClick = { state.account?.let { Offline.download(context, it.id, server, listOf(track)) }; onClose() },
                     trailing = { SymbolIcon(Symbol.Downloaded, ink.label, 20.dp) })
             val fav = state.playback.isFavorite(track)
-            ListRow(if (fav) "Aus Favoriten entfernen" else "Favorit", onClick = { state.playback.toggleFavorite(track, server); onClose() },
+            ListRow(if (fav) tr("Aus Favoriten entfernen") else "Favorit", onClick = { state.playback.toggleFavorite(track, server); onClose() },
                 trailing = { SymbolIcon(Symbol.Star, ink.label, 20.dp, filled = fav) })
             val stored = state.account?.let { Offline.stored(context, it.id, track) }
-            ListRow("Teilen …", separator = stored != null, onClick = { onClose(); scope.launch { shareTrack(context, state, server, track) } },
+            ListRow(tr("Teilen …"), separator = stored != null, onClick = { onClose(); scope.launch { shareTrack(context, state, server, track) } },
                 trailing = { SymbolIcon(Symbol.Share, ink.label, 20.dp) })
             // Like iOS: "Download entfernen" in red, only when the title is on the phone.
-            if (stored != null) ListRow("Download entfernen", separator = false, titleColor = Red, onClick = { Offline.remove(context, listOf(stored.first)); onClose() },
+            if (stored != null) ListRow(tr("Download entfernen"), separator = false, titleColor = Red, onClick = { Offline.remove(context, listOf(stored.first)); onClose() },
                 trailing = { SymbolIcon(Symbol.Trash, Red, 20.dp) })
         }
     }

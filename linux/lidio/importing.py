@@ -5,6 +5,7 @@ import base64, csv, io, json, re, unicodedata, urllib.parse, urllib.request
 from dataclasses import dataclass, field
 
 from .servers import ServerError
+from .i18n import _
 
 FOUND, UNSURE, MISSING = "found", "unsure", "missing"
 
@@ -254,7 +255,7 @@ def _get(url, headers=None):
         with urllib.request.urlopen(req, timeout=20) as r:
             return json.loads(r.read())
     except (OSError, ValueError) as e:
-        raise ServerError("Keine Verbindung zum Dienst.") from e
+        raise ServerError(_("Keine Verbindung zum Dienst.")) from e
 
 
 class Deezer:
@@ -265,7 +266,7 @@ class Deezer:
     def _get(self, url):
         j = _get(url)
         if isinstance(j, dict) and j.get("error"):
-            raise ServerError("Deezer: " + (j["error"].get("message") or "Fehler"))
+            raise ServerError("Deezer: " + (j["error"].get("message") or _("Fehler")))
         return j
 
     def search(self, query):
@@ -306,9 +307,9 @@ class Spotify:
                 with urllib.request.urlopen(req, timeout=20) as r:
                     self.token = json.loads(r.read()).get("access_token")
             except OSError as e:
-                raise ServerError("Spotify hat die Client-ID abgelehnt.") from e
+                raise ServerError(_("Spotify hat die Client-ID abgelehnt.")) from e
             if not self.token:
-                raise ServerError("Spotify hat die Client-ID abgelehnt.")
+                raise ServerError(_("Spotify hat die Client-ID abgelehnt."))
         return self.token
 
     def _get(self, url):

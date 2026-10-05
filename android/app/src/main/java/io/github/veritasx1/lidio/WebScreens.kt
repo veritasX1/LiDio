@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
@@ -85,7 +87,7 @@ fun WebLoadButton(hit: WebHit, state: AppState? = null, playlistId: String? = nu
             }
             if (st == "fertig") { state?.generation = (state?.generation ?: 0) + 1 }
         }
-        Box(Modifier.size(36.dp).semantics { contentDescription = when (st) { "fertig" -> "Auf dem Server"; "fehler" -> "Auf den Server laden ging nicht: $note"; else -> "Wird auf den Server geladen" } },
+        Box(Modifier.size(36.dp).semantics { contentDescription = when (st) { "fertig" -> tr("Auf dem Server"); "fehler" -> tr("Auf den Server laden ging nicht: {note}", "note" to note); else -> tr("Wird auf den Server geladen") } },
             contentAlignment = Alignment.Center) {
             when (st) {
                 "fertig" -> SymbolIcon(Symbol.Server, ink.secondary, 18.dp)
@@ -95,25 +97,25 @@ fun WebLoadButton(hit: WebHit, state: AppState? = null, playlistId: String? = nu
         }
         return
     }
-    if (asking && state != null) MenuSheet("Laden", hit.title, { asking = false }) {
-        MenuRow("Auf dieses Gerät", Symbol.Downloaded) { asking = false; WebDownloads.add(context, listOf(hit)) }
+    if (asking && state != null) MenuSheet(tr("Laden"), hit.title, { asking = false }) {
+        MenuRow(tr("Auf dieses Gerät"), Symbol.Downloaded) { asking = false; WebDownloads.add(context, listOf(hit)) }
         val ok = laderThere == true
-        ListRow(if (playlistId != null) "Auf den Server – in diese Playlist" else "Auf den Server",
-            if (ok) "In deine Mediathek auf dem Server" else if (laderThere == null) "Prüft …" else "Braucht den LiDio-Lader auf dem Pi",
+        ListRow(if (playlistId != null) tr("Auf den Server – in diese Playlist") else tr("Auf den Server"),
+            if (ok) tr("In deine Mediathek auf dem Server") else if (laderThere == null) tr("Prüft …") else tr("Braucht den LiDio-Lader auf dem Pi"),
             separator = false, height = 60.dp, titleColor = if (ok) ink.label else ink.tertiary,
             onClick = if (!ok) null else ({
                 asking = false
                 val a = state.account ?: return@ListRow
                 scope.launch {
                     val err = withContext(Dispatchers.IO) { runCatching { Lader.load(a, state.address, hit, playlistId, line, position) }.exceptionOrNull() }
-                    if (err != null) state.notice = err.message ?: "Der Lader hat abgelehnt."
+                    if (err != null) state.notice = err.message ?: tr("Der Lader hat abgelehnt.")
                 }
             }), trailing = { SymbolIcon(Symbol.Server, if (ok) ink.label else ink.tertiary, 20.dp) })
         LaunchedEffect(Unit) { laderThere = withContext(Dispatchers.IO) { Lader.available(state.account, state.address) } }
     }
     val description = when (job?.state) {
-        null -> "Laden"; WebJob.State.Waiting -> "Wartet – antippen bricht ab"; WebJob.State.Loading -> "Wird geladen – antippen bricht ab"
-        WebJob.State.Converting -> "Wird umgewandelt"; WebJob.State.Done -> "Geladen"; WebJob.State.Failed -> "Fehlgeschlagen – erneut versuchen"
+        null -> tr("Laden"); WebJob.State.Waiting -> tr("Wartet – antippen bricht ab"); WebJob.State.Loading -> tr("Wird geladen – antippen bricht ab")
+        WebJob.State.Converting -> tr("Wird umgewandelt"); WebJob.State.Done -> tr("Geladen"); WebJob.State.Failed -> tr("Fehlgeschlagen – erneut versuchen")
     }
     Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) {
         when (job?.state) {
@@ -167,7 +169,7 @@ fun WaitingRing(size: androidx.compose.ui.unit.Dp = 26.dp) {
 fun WebHitRow(hit: WebHit, showSource: Boolean = true) {
     val ink = Ink
     val context = LocalContext.current
-    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Laden") {
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = tr("Laden")) {
             if (WebDownloads.jobs.none { it.hit.key == hit.key && it.state != WebJob.State.Failed }) WebDownloads.add(context, listOf(hit)) }
         .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Cover(hit.thumbnail, Modifier.size(48.dp), 5.dp)
@@ -192,23 +194,23 @@ fun LazyListScope.webSearch(state: AppState, asked: String, source: WebSource, r
         return
     }
     loading(results, retry) { (title, hits) ->
-        if (hits.isEmpty()) item { Label("Bei ${if (isLink(asked)) "diesem Link" else source.label} nichts zu „$asked“.", 17f, color = Ink.secondary, modifier = Modifier.padding(16.dp)) }
+        if (hits.isEmpty()) item { Label(tr("Bei {if} nichts zu „{asked}“.", "if" to (if (isLink(asked)) "diesem Link" else source.label), "asked" to asked), 17f, color = Ink.secondary, modifier = Modifier.padding(16.dp)) }
         else if (isLink(asked) && hits.size > 1) item {
             val context = LocalContext.current
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Label(title, 22f, 700, lines = 2)
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                     SourceBadge(hits.first().source)
-                    Label("${hits.size} Titel", 13f, color = Ink.secondary, modifier = Modifier.padding(start = 8.dp))
+                    Label(tr("{size} Titel", "size" to hits.size), 13f, color = Ink.secondary, modifier = Modifier.padding(start = 8.dp))
                 }
                 val open = hits.filter { h -> WebDownloads.jobs.none { it.hit.key == h.key && it.state != WebJob.State.Failed } }
-                Capsule(Symbol.Downloaded, if (open.isEmpty()) "Alle in der Warteschlange" else "Alle ${open.size} laden", Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                Capsule(Symbol.Downloaded, if (open.isEmpty()) tr("Alle in der Warteschlange") else tr("Alle {size} laden", "size" to open.size), Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     WebDownloads.add(context, open)
                 }
             }
         }
         else item {
-            Label("Gefunden bei ${if (isLink(asked)) hits.first().source.label else source.label}. Antippen spielt, ↓ lädt.",
+            Label(tr("Gefunden bei {if}. Antippen spielt, ↓ lädt.", "if" to (if (isLink(asked)) hits.first().source.label else source.label)),
                 13f, color = Ink.secondary, lines = 2, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         }
         val tracks = hits.map { it.asTrack() }
@@ -242,14 +244,14 @@ fun WebScreen(state: AppState) {
     Column(Modifier.fillMaxSize()) {
         NavBar(state)
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
-            largeTitle("Aus dem Netz", topInset = false)
-            if (open.isNotEmpty() || done > 0) item { SectionHeader("Downloads", if (done > 0) "Fertige ausblenden" else null) { WebDownloads.clearDone(context) } }
+            largeTitle(tr("Aus dem Netz"), topInset = false)
+            if (open.isNotEmpty() || done > 0) item { SectionHeader("Downloads", if (done > 0) tr("Fertige ausblenden") else null) { WebDownloads.clearDone(context) } }
             items(open, key = { "j" + it.id }) { job -> JobRow(job) }
             if (open.isEmpty() && done > 0) item {
-                Label("Alles geladen.", 15f, color = ink.secondary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                Label(tr("Alles geladen."), 15f, color = ink.secondary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             }
             val tracks = load.value.orEmpty()
-            item { SectionHeader("Geladen") }
+            item { SectionHeader(tr("Geladen")) }
             if (tracks.isEmpty() && !load.loading) item {
                 Label(Variant.text("netz-leer"),
                     15f, color = ink.secondary, lines = 4, modifier = Modifier.padding(horizontal = 16.dp))
@@ -261,14 +263,14 @@ fun WebScreen(state: AppState) {
             item {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 24.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
                     ListRow(Variant.text("lader"), version ?: "…", height = 56.dp, trailing = {
-                        Label(if (updating) "Wird aktualisiert …" else "Aktualisieren", 17f, color = ink.tint, modifier = Modifier.clickable(role = Role.Button, enabled = !updating) {
+                        Label(if (updating) tr("Wird aktualisiert …") else "Aktualisieren", 17f, color = ink.tint, modifier = Modifier.clickable(role = Role.Button, enabled = !updating) {
                             updating = true
-                            scope.launch { version = withContext(Dispatchers.IO) { runCatching { engine.update() }.getOrElse { "Aktualisieren ging nicht" } }; updating = false }
+                            scope.launch { version = withContext(Dispatchers.IO) { runCatching { engine.update() }.getOrElse { tr("Aktualisieren ging nicht") } }; updating = false }
                         })
                     })
-                    ListRow("Speicherort", WebDownloads.folder(context).absolutePath.substringAfter("/Android/").let { "Android/$it" }, height = 56.dp, separator = false)
+                    ListRow("Speicherort", WebDownloads.folder(context).absolutePath.substringAfter("/Android/").let { tr("Android/{it}", "it" to it) }, height = 56.dp, separator = false)
                 }
-                Label("Nur für den privaten Gebrauch. Die Seiten ändern sich oft – geht etwas nicht mehr, hilft meist „Aktualisieren“.",
+                Label(tr("Nur für den privaten Gebrauch. Die Seiten ändern sich oft – geht etwas nicht mehr, hilft meist „Aktualisieren“."),
                     13f, color = ink.secondary, lines = 3, modifier = Modifier.padding(start = 32.dp, end = 32.dp, bottom = 24.dp))
             }
         }
@@ -297,7 +299,7 @@ private fun JobRow(job: WebJob) {
         }
         WebLoadButton(job.hit)
         if (job.state == WebJob.State.Failed) Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) { WebDownloads.remove(context, job.id) }
-            .semantics { contentDescription = "Aus der Liste nehmen" }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Close, ink.secondary, 14.dp) }
+            .semantics { contentDescription = tr("Aus der Liste nehmen") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Close, ink.secondary, 14.dp) }
     }
 }
 
@@ -314,7 +316,7 @@ fun WebListButton(hits: List<WebHit>) {
     val done = jobs.count { it.state == WebJob.State.Done }
     val busy = jobs.any { it.state == WebJob.State.Waiting || it.state == WebJob.State.Loading || it.state == WebJob.State.Converting }
     Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, enabled = !busy && done < hits.size) { WebDownloads.add(context, hits) }
-        .semantics { contentDescription = when { done == hits.size -> "Alle geladen"; busy -> "Wird geladen, $done von ${hits.size}"; else -> "Alle ${hits.size} laden" } },
+        .semantics { contentDescription = when { done == hits.size -> tr("Alle geladen"); busy -> tr("Wird geladen, {done} von {size}", "done" to done, "size" to hits.size); else -> tr("Alle {size} laden", "size" to hits.size) } },
         contentAlignment = Alignment.Center) {
         when {
             hits.isNotEmpty() && done == hits.size -> SymbolIcon(Symbol.Check, ink.secondary, 18.dp, weight = 2.4f)
@@ -373,11 +375,11 @@ fun MissingHeader(state: AppState, missing: List<String>) {
         }
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Label("${missing.size} " + (if (missing.size == 1) "Titel fehlt" else "Titel fehlen") + " auf dem Server" +
-            if (Variant.PRIVATE) " – grau, mit ↓ zum Laden" else " – grau", 13f, color = Ink.secondary, lines = 2, modifier = Modifier.weight(1f))
-        if (Variant.PRIVATE) Label(asking ?: "Alle laden", 15f, 400, Ink.tint, Modifier.clickable(role = Role.Button, enabled = asking == null) {
-            asking = "Sucht …"
-            WebDownloads.addSearched(context, missing.map(MissingNote::wanted)) { done, total -> asking = if (done < total) "$done/$total" else "In der Warteschlange" }
+        Label("${missing.size} " + (if (missing.size == 1) tr("Titel fehlt") else tr("Titel fehlen")) + tr(" auf dem Server") +
+            if (Variant.PRIVATE) tr(" – grau, mit ↓ zum Laden") else tr(" – grau"), 13f, color = Ink.secondary, lines = 2, modifier = Modifier.weight(1f))
+        if (Variant.PRIVATE) Label(asking ?: tr("Alle laden"), 15f, 400, Ink.tint, Modifier.clickable(role = Role.Button, enabled = asking == null) {
+            asking = tr("Sucht …")
+            WebDownloads.addSearched(context, missing.map(MissingNote::wanted)) { done, total -> asking = if (done < total) "$done/$total" else tr("In der Warteschlange") }
         }.padding(start = 12.dp))
     }
 }
@@ -397,7 +399,7 @@ fun MissingTrackRow(state: AppState, line: String, playlistId: String? = null, d
     val tick = MissingTick.value.intValue
     var found by remember(line, tick) { mutableStateOf(MissingHits.known(context, line)) }
     val web = remember { Variant.webServer(context) }
-    Row(Modifier.fillMaxWidth().clickable(enabled = web != null, role = Role.Button, onClickLabel = "Aus dem Netz spielen") {
+    Row(Modifier.fillMaxWidth().clickable(enabled = web != null, role = Role.Button, onClickLabel = tr("Aus dem Netz spielen")) {
             scope.launch { (found ?: withContext(Dispatchers.IO) { MissingHits.find(context, line) })?.let { t -> found = t
                 if (onPlay != null) onPlay(t) else web?.let { state.playback.play(it, listOf(t)) } } } }
         .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp).semantics { contentDescription = "${wanted.title}${if (dim) ", fehlt auf dem Server" else ""}" },
@@ -416,14 +418,14 @@ fun MissingTrackRow(state: AppState, line: String, playlistId: String? = null, d
         val failed = found?.let { t -> web?.let { w -> WebDownloads.jobs.lastOrNull { it.hit.key == t.asHit(w).key }?.state == WebJob.State.Failed } } == true
         val nowhere = web == null || MissingHits.nothing(line) || failed
         SymbolIcon(if (nowhere) Symbol.CloudOff else Symbol.Cloud, ink.tertiary, 15.dp, modifier = Modifier.padding(end = 8.dp)
-            .semantics { contentDescription = if (nowhere) "Nirgends zu bekommen" else "Nicht auf dem Server – im Internet" })
+            .semantics { contentDescription = if (nowhere) tr("Nirgends zu bekommen") else tr("Nicht auf dem Server – im Internet") })
         found?.duration?.takeIf { it > 0 }?.let { Label(duration(it), 13f, color = if (dim) ink.tertiary else ink.secondary, tabular = true, modifier = Modifier.padding(end = 4.dp)) }
         if (web != null) {
             val hit = found?.asHit(web)
             if (hit != null) WebLoadButton(hit, state, playlistId, line, MissingNote.position(line))
             else if (!MissingHits.nothing(line)) Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) {
                     scope.launch { withContext(Dispatchers.IO) { MissingHits.find(context, line) }?.let { t -> found = t; WebDownloads.add(context, listOf(t.asHit(web))) } } }
-                .semantics { contentDescription = "Aus dem Netz laden" }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Downloaded, ink.tint, 26.dp) }
+                .semantics { contentDescription = tr("Aus dem Netz laden") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Downloaded, ink.tint, 26.dp) }
         }
     }
 }

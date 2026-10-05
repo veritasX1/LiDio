@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,21 +45,21 @@ fun SourceMark(source: Source) {
     val ink = Ink
     val colour = when (source) { Source.Server -> ink.tint; Source.Deezer -> Color(0xFFA238FF); Source.Spotify -> Color(0xFF1DB954) }
     Box(Modifier.clip(RoundedCornerShape(5.dp)).border(1.dp, colour, RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 1.dp)
-        .semantics { contentDescription = "Quelle: ${source.label}" }) { Label(source.label, 11f, 700, colour) }
+        .semantics { contentDescription = tr("Quelle: {label}", "label" to source.label) }) { Label(source.label, 11f, 700, colour) }
 }
 
 /** Search: "Playlists" from the own server and – when switched on – Deezer and Spotify, each with its mark. */
 fun LazyListScope.publicPlaylists(state: AppState, server: MusicServer, query: String, own: List<Playlist>, remote: Load<List<RemoteList>>?, onEnableDeezer: () -> Unit) {
     val hasRemote = state.playback.settings.publicSources().isNotEmpty()
     if (own.isEmpty() && remote?.value.isNullOrEmpty() && hasRemote && remote?.loading != true) return
-    item { SectionHeader("Playlists") }
+    item { SectionHeader(tr("Playlists")) }
     items(own, key = { "op" + it.id }) { p ->
-        ListRow(p.name, "${p.trackCount} Titel", onClick = { state.open(Route.PlaylistPage(p.id, p.name, web = server.kind == ServerKind.Web)) }, height = 68.dp,
+        ListRow(p.name, tr("{trackCount} Titel", "trackCount" to p.trackCount), onClick = { state.open(Route.PlaylistPage(p.id, p.name, web = server.kind == ServerKind.Web)) }, height = 68.dp,
             leading = { Cover(server.cover(p.coverId, 160), Modifier.size(56.dp), 6.dp) }, trailing = { SourceMark(Source.Server) })
     }
     remote?.value?.let { list ->
         items(list, key = { "r" + it.source + it.id }) { p ->
-            ListRow(p.name, listOfNotNull(p.owner.takeIf { it.isNotEmpty() }, "${p.count} Titel").joinToString(" · "),
+            ListRow(p.name, listOfNotNull(p.owner.takeIf { it.isNotEmpty() }, tr("{count} Titel", "count" to p.count)).joinToString(" · "),
                 onClick = { state.open(Route.RemotePage(p)) }, height = 68.dp,
                 leading = { Cover(p.cover, Modifier.size(56.dp), 6.dp) }, trailing = { SourceMark(p.source) })
         }
@@ -65,8 +67,8 @@ fun LazyListScope.publicPlaylists(state: AppState, server: MusicServer, query: S
     remote?.error?.let { item { Label(it, 13f, color = Red, modifier = Modifier.padding(horizontal = 16.dp), lines = 2) } }
     if (!hasRemote) item {
         Column(Modifier.padding(16.dp).clip(RoundedCornerShape(10.dp)).background(Ink.card).clickable(role = Role.Button, onClick = onEnableDeezer).padding(14.dp)) {
-            Label("Auch öffentliche Playlists bei Deezer suchen", 17f, 400, Ink.tint)
-            Label("Deine Suchbegriffe gehen dann an Deezer. Abschalten jederzeit unter Mediathek → Server.", 13f, color = Ink.secondary, lines = 3)
+            Label(tr("Auch öffentliche Playlists bei Deezer suchen"), 17f, 400, Ink.tint)
+            Label(tr("Deine Suchbegriffe gehen dann an Deezer. Abschalten jederzeit unter Mediathek → Server."), 13f, color = Ink.secondary, lines = 3)
         }
     }
 }
@@ -90,14 +92,14 @@ fun RemoteScreen(state: AppState, server: MusicServer, route: Route.RemotePage) 
                 val lines = order.map { it.toString() }
                 // A tapped title already plays (started): the others follow behind it.
                 val first = started ?: lines.firstNotNullOfOrNull { l -> withContext(Dispatchers.IO) { MissingHits.find(context, l) } }
-                    ?: run { state.notice = "Bei ${Variant.MUSIC} nichts davon gefunden."; return@launch }
+                    ?: run { state.notice = tr("Bei {MUSIC} nichts davon gefunden.", "MUSIC" to Variant.MUSIC); return@launch }
                 if (started == null) state.playback.play(web, listOf(first))
                 lines.forEach { l -> withContext(Dispatchers.IO) { MissingHits.find(context, l) }?.let { t ->
                     if (t.id != first.id && state.playback.current != null) state.playback.addToQueue(web, t) } }
             } else {
-                state.notice = "Sucht die Titel auf deinem Server …"
+                state.notice = tr("Sucht die Titel auf deinem Server …")
                 val found = withContext(Dispatchers.IO) { Matcher.run(server, order) }.filter { it.match == Match.Found }.mapNotNull { it.track }
-                if (found.isEmpty()) state.notice = "Keiner dieser Titel liegt auf deinem Server." else state.playback.play(server, found)
+                if (found.isEmpty()) state.notice = tr("Keiner dieser Titel liegt auf deinem Server.") else state.playback.play(server, found)
             }
         }
     }
@@ -105,8 +107,8 @@ fun RemoteScreen(state: AppState, server: MusicServer, route: Route.RemotePage) 
         // The transfer is a small symbol now, like ↓ on an album: the server with an arrow (Olaf 05.10.2026).
         NavBar(state, trailing = load.value?.second?.let { wanted -> {
             Box(Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                .clickable(role = Role.Button, onClickLabel = "Auf den Server übertragen") { state.open(Route.ImportWith(list.name, wanted, list.cover)) }
-                .semantics { contentDescription = "Auf den Server übertragen" }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.ServerDown, ink.tint, 24.dp) }
+                .clickable(role = Role.Button, onClickLabel = tr("Auf den Server übertragen")) { state.open(Route.ImportWith(list.name, wanted, list.cover)) }
+                .semantics { contentDescription = tr("Auf den Server übertragen") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.ServerDown, ink.tint, 24.dp) }
         } })
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
             item {
@@ -115,18 +117,18 @@ fun RemoteScreen(state: AppState, server: MusicServer, route: Route.RemotePage) 
                     Label(list.name, 22f, 700, modifier = Modifier.padding(top = 16.dp, start = 24.dp, end = 24.dp), lines = 2, align = TextAlign.Center)
                     Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         SourceMark(list.source)
-                        if (list.owner.isNotEmpty()) Label("  von ${list.owner}", 13f, color = ink.secondary)
+                        if (list.owner.isNotEmpty()) Label(tr("  von {owner}", "owner" to list.owner), 13f, color = ink.secondary)
                     }
                 }
             }
             loading(load, retry) { (_, wanted) ->
                 item {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Capsule(Symbol.Play, "Wiedergabe", Modifier.weight(1f)) { playAll(wanted) }
-                        Capsule(Symbol.Shuffle, "Zufall", Modifier.weight(1f)) { playAll(wanted, shuffled = true) }
+                        Capsule(Symbol.Play, tr("Wiedergabe"), Modifier.weight(1f)) { playAll(wanted) }
+                        Capsule(Symbol.Shuffle, tr("Zufall"), Modifier.weight(1f)) { playAll(wanted, shuffled = true) }
                     }
-                    Label(if (web != null) "Antippen spielt einen Titel über ${Variant.MUSIC}, ↓ lädt ihn. Oben rechts überträgst du die ganze Playlist auf deinen Server."
-                        else "Antippen spielt einen Titel von deinem Server, wenn er dort liegt. Oben rechts überträgst du die Playlist auf deinen Server.",
+                    Label(if (web != null) tr("Antippen spielt einen Titel über {MUSIC}, ↓ lädt ihn. Oben rechts überträgst du die ganze Playlist auf deinen Server.", "MUSIC" to Variant.MUSIC)
+                        else tr("Antippen spielt einen Titel von deinem Server, wenn er dort liegt. Oben rechts überträgst du die Playlist auf deinen Server."),
                         13f, color = ink.secondary, lines = 3, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
                 }
                 if (web != null) item {
@@ -148,11 +150,11 @@ fun RemoteScreen(state: AppState, server: MusicServer, route: Route.RemotePage) 
                         scope.launch {
                             val r = withContext(Dispatchers.IO) { Matcher.run(server, listOf(w)) }.first()
                             val t = r.track
-                            if (r.match != Match.Missing && t != null) state.playback.play(server, listOf(t)) else state.notice = "„${w.title}“ liegt nicht auf deinem Server."
+                            if (r.match != Match.Missing && t != null) state.playback.play(server, listOf(t)) else state.notice = tr("„{title}“ liegt nicht auf deinem Server.", "title" to w.title)
                         }
                     },
                     trailing = {
-                        SymbolIcon(Symbol.Cloud, ink.tertiary, 15.dp, modifier = Modifier.padding(end = 8.dp).semantics { contentDescription = "Im Internet" })
+                        SymbolIcon(Symbol.Cloud, ink.tertiary, 15.dp, modifier = Modifier.padding(end = 8.dp).semantics { contentDescription = tr("Im Internet") })
                         if (w.seconds > 0) Label(duration(w.seconds), 13f, color = ink.secondary, tabular = true)
                     }) }
             }
@@ -168,10 +170,10 @@ fun PublicSettings(state: AppState) {
     var deezer by remember { mutableStateOf(settings.deezer) }
     var id by remember { mutableStateOf(settings.spotifyId) }
     var secret by remember { mutableStateOf(settings.spotifySecret) }
-    Label("ÖFFENTLICHE PLAYLISTS", 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, bottom = 6.dp))
+    Label(tr("ÖFFENTLICHE PLAYLISTS"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, bottom = 6.dp))
     Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
-        ListRow("Deezer durchsuchen", "Ohne Konto – Suchbegriffe gehen an Deezer", height = 60.dp,
-            trailing = { IosSwitch(deezer, "Deezer durchsuchen") { deezer = it; settings.deezer = it } })
+        ListRow(tr("Deezer durchsuchen"), tr("Ohne Konto – Suchbegriffe gehen an Deezer"), height = 60.dp,
+            trailing = { IosSwitch(deezer, tr("Deezer durchsuchen")) { deezer = it; settings.deezer = it } })
         for ((label, value, set) in listOf(Triple("Spotify-Client-ID", id, { v: String -> id = v; settings.spotifyId = v }),
             Triple("Spotify-Secret", secret, { v: String -> secret = v; settings.spotifySecret = v }))) {
             Row(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -185,6 +187,6 @@ fun PublicSettings(state: AppState) {
             }
         }
     }
-    Label("Für Spotify brauchst du eine eigene App unter developer.spotify.com (Client-ID und Secret). Spotifys eigene Redaktions-Playlists sind für neue Apps gesperrt, Playlists von Nutzern gehen. Das Secret bleibt verschlüsselt auf dem Gerät.",
+    Label(tr("Für Spotify brauchst du eine eigene App unter developer.spotify.com (Client-ID und Secret). Spotifys eigene Redaktions-Playlists sind für neue Apps gesperrt, Playlists von Nutzern gehen. Das Secret bleibt verschlüsselt auf dem Gerät."),
         13f, color = ink.secondary, lines = 6, modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp, bottom = 20.dp))
 }

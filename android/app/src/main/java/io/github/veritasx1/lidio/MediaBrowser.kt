@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import org.json.JSONObject
 
 /** Emby and Jellyfin – Jellyfin began as a fork of Emby, so both speak the same "MediaBrowser" API. Differences: Emby lives
@@ -105,10 +107,10 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
     override fun createPlaylist(name: String, tracks: List<Track>): Playlist {
         val chunks = tracks.map { it.id }.chunked(100)
         val first = chunks.firstOrNull().orEmpty()
-        val query = listOf("Name" to name, "Ids" to first.joinToString(","), "UserId" to userId, "MediaType" to "Audio")
+        val query = listOf(tr("Name") to name, "Ids" to first.joinToString(","), "UserId" to userId, "MediaType" to "Audio")
             .joinToString("&") { (k, v) -> "$k=${Http.encode(v)}" }
         val body = JSONObject().put("Name", name).put("Ids", org.json.JSONArray(first)).put("UserId", userId).put("MediaType", "Audio").toString()
-        val id = JSONObject(Http.post("$base/Playlists?$query", body, headers)).str("Id") ?: throw ServerError("Die Playlist wurde nicht angelegt.")
+        val id = JSONObject(Http.post("$base/Playlists?$query", body, headers)).str("Id") ?: throw ServerError(tr("Die Playlist wurde nicht angelegt."))
         chunks.drop(1).forEach { chunk -> Http.post("$base/Playlists/$id/Items?Ids=${chunk.joinToString(",")}&UserId=$userId", "{}", headers) }
         return Playlist(id, name, tracks.size, tracks.sumOf { it.duration })
     }
@@ -142,14 +144,14 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
 
     override fun played(track: Track) { runCatching { Http.post("$base/Users/$userId/PlayedItems/${track.id}", "{}", headers) } }
 
-    private fun artist(j: JSONObject) = Artist(j.id(), j.str("Name") ?: "Unbekannt", (j.int("ChildCount") ?: 0),
+    private fun artist(j: JSONObject) = Artist(j.id(), j.str(tr("Name")) ?: tr("Unbekannt"), (j.int("ChildCount") ?: 0),
         if (j.obj("ImageTags")?.has("Primary") == true) j.id() else null)
 
     private fun album(j: JSONObject): Album {
         val artist = j.arr("AlbumArtists").objects().firstOrNull()
-        return Album(j.id(), j.str("Name") ?: "Unbekanntes Album", j.str("AlbumArtist") ?: artist?.str("Name") ?: "Unbekannt",
+        return Album(j.id(), j.str(tr("Name")) ?: tr("Unbekanntes Album"), j.str("AlbumArtist") ?: artist?.str(tr("Name")) ?: tr("Unbekannt"),
             artist?.str("Id"), j.int("ProductionYear"), if (j.obj("ImageTags")?.has("Primary") == true) j.id() else null,
-            (j.int("ChildCount") ?: 0), ticks(j), j.arr("Genres")?.optString(0)?.takeIf { it.isNotEmpty() },
+            (j.int("ChildCount") ?: 0), ticks(j), j.arr(tr("Genres"))?.optString(0)?.takeIf { it.isNotEmpty() },
             (j.str("AlbumArtist") ?: "").equals("Various Artists", true) || (j.str("AlbumArtist") ?: "").equals("Verschiedene Interpreten", true))
     }
 
@@ -161,8 +163,8 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
             else -> null
         }
         val source = j.arr("MediaSources").objects().firstOrNull()
-        return Track(j.id(), j.str("Name") ?: "Unbekannt", artists.joinToString(", ").ifEmpty { j.str("AlbumArtist") ?: "Unbekannt" },
-            j.str("Album") ?: "", j.str("AlbumId"), ticks(j), j.int("IndexNumber"), j.int("ParentIndexNumber"), j.int("ProductionYear"),
+        return Track(j.id(), j.str(tr("Name")) ?: tr("Unbekannt"), artists.joinToString(", ").ifEmpty { j.str("AlbumArtist") ?: tr("Unbekannt") },
+            j.str(tr("Album")) ?: "", j.str("AlbumId"), ticks(j), j.int("IndexNumber"), j.int("ParentIndexNumber"), j.int("ProductionYear"),
             cover, j.str("Path"), source?.long("Size") ?: 0, j.str("Container"),
             favorite = j.obj("UserData")?.optBoolean("IsFavorite"))
     }
@@ -179,7 +181,7 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
         get("/Items/${track.id}/InstantMix", "UserId" to userId, "Limit" to count, "Fields" to FIELDS).arr("Items").objects().map(::track)
             .filter { it.id != track.id }
 
-    private fun playlist(j: JSONObject) = Playlist(j.id(), j.str("Name") ?: "Playlist", (j.int("ChildCount") ?: 0), ticks(j),
+    private fun playlist(j: JSONObject) = Playlist(j.id(), j.str(tr("Name")) ?: "Playlist", (j.int("ChildCount") ?: 0), ticks(j),
         j.obj("ImageTags")?.str("Primary")?.let { tag -> "${j.id()}#$tag" }, MissingNote.read(j.str("Overview")),
         MissingNote.origin(j.str("Overview")))
 
@@ -188,7 +190,7 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
 
     /** Emby lists the genres most used first – the first 24. */
     override fun genres(): List<Genre> =
-        get("/MusicGenres", "UserId" to userId, "Recursive" to true, "Limit" to 24).arr("Items").objects().map { Genre(it.id(), it.str("Name") ?: "") }
+        get("/MusicGenres", "UserId" to userId, "Recursive" to true, "Limit" to 24).arr("Items").objects().map { Genre(it.id(), it.str(tr("Name")) ?: "") }
 
     override fun genreAlbums(genre: Genre): List<Album> =
         items("IncludeItemTypes" to "MusicAlbum", "Fields" to ALBUM_FIELDS, "GenreIds" to genre.id, "SortBy" to "DateCreated", "SortOrder" to "Descending", "Limit" to 200).map(::album)
@@ -203,7 +205,7 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
             val all = get("/Users/ItemAccess", "ItemId" to playlistId).arr("Items").objects()
             val me = all.firstOrNull { it.id() == userId }?.optString("UserItemShareLevel") ?: "None"
             val users = all.filter { it.id() != userId }.map { u ->
-                ShareUser(u.id(), u.str("Name") ?: "?", when (u.optString("UserItemShareLevel")) { "Read" -> "read"; "None", "" -> "none"; else -> "write" })
+                ShareUser(u.id(), u.str(tr("Name")) ?: "?", when (u.optString("UserItemShareLevel")) { "Read" -> "read"; "None", "" -> "none"; else -> "write" })
             }
             Sharing(users, everyone = users.isNotEmpty() && users.all { it.level != "none" }, perUser = true, canManage = me.startsWith("Manage"))
         } else {
@@ -211,7 +213,7 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
             val shares = p.arr("Shares").objects().associate { it.str("UserId").orEmpty() to (if (it.optBoolean("CanEdit")) "write" else "read") }
             val people = runCatching { JSONObject("{\"Items\":" + Http.get("$base/Users", headers) + "}").arr("Items").objects() }.getOrNull()
                 ?: JSONObject("{\"Items\":" + Http.get("$base/Users/Public", headers) + "}").arr("Items").objects()
-            Sharing(people.filter { it.id() != userId }.map { ShareUser(it.id(), it.str("Name") ?: "?", shares[it.id()] ?: "none") },
+            Sharing(people.filter { it.id() != userId }.map { ShareUser(it.id(), it.str(tr("Name")) ?: "?", shares[it.id()] ?: "none") },
                 everyone = p.optBoolean("OpenAccess"), perUser = true)
         }
     }.getOrNull()
@@ -272,8 +274,8 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
         fun login(kind: ServerKind, address: String, user: String, password: String, device: String = DEVICE): Pair<String, String> {
             val body = JSONObject().put("Username", user).put("Pw", password).toString()
             val reply = JSONObject(Http.post("${root(kind, address)}/Users/AuthenticateByName", body, auth(kind, device, null)))
-            val token = reply.str("AccessToken") ?: throw ServerError("Anmeldung abgelehnt.")
-            return (reply.obj("User")?.id() ?: throw ServerError("Anmeldung abgelehnt.")) to token
+            val token = reply.str("AccessToken") ?: throw ServerError(tr("Anmeldung abgelehnt."))
+            return (reply.obj("User")?.id() ?: throw ServerError(tr("Anmeldung abgelehnt."))) to token
         }
     }
 }

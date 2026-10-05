@@ -1,5 +1,7 @@
 package io.github.veritasx1.lidio
 
+import io.github.veritasx1.lidio.i18n.tr
+
 import java.text.Normalizer
 
 /** One line of an imported list: what the list says (title, artist, maybe album and length). */

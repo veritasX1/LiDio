@@ -12,6 +12,7 @@ from gi.repository import Adw, GdkPixbuf, GLib, Gtk, Gdk, Pango
 from .covers import Cover
 from .player import REPEAT_OFF, REPEAT_ALL
 from .sprites import SPRITES, FONT
+from .i18n import _
 
 DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "skins")
 SKINS = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "lidio", "skins")
@@ -25,7 +26,7 @@ class MiniPlayer(Gtk.Window):
     """Music's MiniPlayer: the cover fills the window; on hover the controls fade in over a dark glass at the bottom."""
 
     def __init__(self, app):
-        super().__init__(application=app, title="LiDio – Mini-Player", resizable=False, decorated=False, css_classes=["mini"])
+        super().__init__(application=app, title=_("LiDio – Mini-Player"), resizable=False, decorated=False, css_classes=["mini"])
         self.app, self.player = app, app.player
         overlay = Gtk.Overlay()
         handle = Gtk.WindowHandle(); handle.set_child(overlay); self.set_child(handle)
@@ -42,15 +43,15 @@ class MiniPlayer(Gtk.Window):
         def button(icon, tip, cb, css="mini-button"):
             b = Gtk.Button(icon_name=icon, tooltip_text=tip, css_classes=["flat", "circular", css]); b.connect("clicked", lambda *_: cb())
             b.update_property([Gtk.AccessibleProperty.LABEL], [tip]); row.append(b); return b
-        button("media-skip-backward-symbolic", "Zurück", self.player.previous)
-        self.play = button("media-playback-start-symbolic", "Wiedergabe", self.player.toggle, "mini-play")
-        button("media-skip-forward-symbolic", "Weiter", self.player.next)
+        button("media-skip-backward-symbolic", _("Zurück"), self.player.previous)
+        self.play = button("media-playback-start-symbolic", _("Wiedergabe"), self.player.toggle, "mini-play")
+        button("media-skip-forward-symbolic", _("Weiter"), self.player.next)
         self.glass.append(row)
         overlay.add_overlay(self.glass)
         top = Gtk.Box(spacing=6, halign=Gtk.Align.END, valign=Gtk.Align.START, margin_top=8, margin_end=8, css_classes=["mini-top"])
-        big = Gtk.Button(icon_name="view-fullscreen-symbolic", tooltip_text="Großes Fenster", css_classes=["circular", "mini-round"])
+        big = Gtk.Button(icon_name="view-fullscreen-symbolic", tooltip_text=_("Großes Fenster"), css_classes=["circular", "mini-round"])
         big.connect("clicked", lambda *_: (self.app.present_window(), self.close()))
-        close = Gtk.Button(icon_name="window-close-symbolic", tooltip_text="Mini-Player schließen", css_classes=["circular", "mini-round"])
+        close = Gtk.Button(icon_name="window-close-symbolic", tooltip_text=_("Mini-Player schließen"), css_classes=["circular", "mini-round"])
         close.connect("clicked", lambda *_: self.close())
         top.append(big); top.append(close)
         overlay.add_overlay(top)
@@ -75,7 +76,7 @@ class MiniPlayer(Gtk.Window):
         self.play.set_icon_name("media-playback-pause-symbolic" if self.player.playing else "media-playback-start-symbolic")
         if what in ("track", "state"):
             self.title.set_text(t.title if t else "LiDio")
-            self.artist.set_text(t.artist if t else "Nichts läuft")
+            self.artist.set_text(t.artist if t else _("Nichts läuft"))
             s = self.player.server
             self.cover.show(s.cover_url(t.cover_id, 600) if t and t.cover_id and s else None)
 
@@ -223,7 +224,7 @@ class Museum:
 # ======================= Winamp window =======================
 class WinampWindow(Gtk.Window):
     def __init__(self, app):
-        super().__init__(application=app, title="LiDio – Winamp", resizable=False, decorated=False)
+        super().__init__(application=app, title=_("LiDio – Winamp"), resizable=False, decorated=False)
         self.app, self.player = app, app.player
         self.k = float(app._setting("winampScale", 2))
         self.skin = load_skin(app._setting("winampSkin", ""))
@@ -593,12 +594,12 @@ class SkinDialog(Adw.Dialog):
     """Choose a skin: those on this computer, and the Winamp Skin Museum (search, most loved first)."""
 
     def __init__(self, win):
-        super().__init__(title="Skins", content_width=560, content_height=620)
+        super().__init__(title=_("Skins"), content_width=560, content_height=620)
         self.win = win
         from .window import run
         tv = Adw.ToolbarView(); hb = Adw.HeaderBar(); tv.add_top_bar(hb)
         page = Adw.PreferencesPage(); tv.set_content(page); self.set_child(tv)
-        mine = Adw.PreferencesGroup(title="Auf diesem Computer")
+        mine = Adw.PreferencesGroup(title=_("Auf diesem Computer"))
         for md5, name, path in installed():
             row = Adw.ActionRow(title=GLib.markup_escape_text(name), activatable=True)
             if md5 == win.app._setting("winampSkin", ""):
@@ -611,11 +612,10 @@ class SkinDialog(Adw.Dialog):
         scale.set_selected([1, 1.5, 2, 3].index(win.k) if win.k in (1, 1.5, 2, 3) else 2)
         scale.connect("notify::selected", lambda r, _: (setattr(win, "k", [1, 1.5, 2, 3][r.get_selected()]), win.app._set("winampScale", win.k), win._resize()))
         size.add(scale)
-        size.set_description("„Immer im Vordergrund“: Rechtsklick in die Titelleiste des Fensters (Alt+Leertaste) → „Immer im Vordergrund“.")
+        size.set_description(_("„Immer im Vordergrund“: Rechtsklick in die Titelleiste des Fensters (Alt+Leertaste) → „Immer im Vordergrund“."))
         page.add(size)
-        museum = Adw.PreferencesGroup(title="Winamp Skin Museum", description="skins.webamp.org – über 60 000 Skins, gesammelt von Jordan Eldredge. "
-                                                                                    "Erst beim Öffnen dieses Fensters fragt LiDio dort an.")
-        search = Gtk.SearchEntry(placeholder_text="Skins suchen", margin_bottom=8)
+        museum = Adw.PreferencesGroup(title=_("Winamp Skin Museum"), description=_("skins.webamp.org – über 60 000 Skins, gesammelt von Jordan Eldredge. Erst beim Öffnen dieses Fensters fragt LiDio dort an."))
+        search = Gtk.SearchEntry(placeholder_text=_("Skins suchen"), margin_bottom=8)
         museum.set_header_suffix(search)
         self.flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=3, min_children_per_line=2, column_spacing=10, row_spacing=10)
         museum.add(self.flow)
