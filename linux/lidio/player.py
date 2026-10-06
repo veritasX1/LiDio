@@ -30,13 +30,17 @@ class Player:
         # Float samples from here on: Milkdrop reads them right after the spectrum (card ef3a3dfb).
         caps = Gst.ElementFactory.make("capsfilter", None)
         caps.set_property("caps", Gst.Caps.from_string("audio/x-raw,format=F32LE"))
+        # Balance (Winamp's slider, card 50adb215): −1 left … +1 right.
+        self.pan = Gst.ElementFactory.make("audiopanorama", "pan")
         spec = Gst.ElementFactory.make("spectrum", "spectrum")
         spec.set_property("bands", 75); spec.set_property("interval", 50_000_000); spec.set_property("threshold", -80)
         spec.set_property("post-messages", True); spec.set_property("message-magnitude", True)
-        for e in (self.eq, conv, caps, spec):
+        for e in (self.eq, conv, caps, self.pan, spec):
             bin_.add(e)
-        self.eq.link(conv); conv.link(caps); caps.link(spec)
+        self.eq.link(conv); conv.link(caps); caps.link(self.pan); self.pan.link(spec)
         self.pcm_listeners = []          # f(bytes of interleaved float32, channels) – only while Milkdrop is open
+        self.wave = [0.0] * 76           # the last samples (mono), for Winamp's oscilloscope – filled while wanted
+        self.want_wave = False
         spec.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, self._pcm)
         bin_.add_pad(Gst.GhostPad.new("sink", self.eq.get_static_pad("sink")))
         bin_.add_pad(Gst.GhostPad.new("src", spec.get_static_pad("src")))
@@ -184,6 +188,33 @@ class Player:
     def history(self):
         return [(p, self.queue[i]) for p, i in enumerate(self.order) if p < self.index]
 
+    # ---------- Winamp playlist editing (card 299f6c4b) ----------
+    def remove_positions(self, positions):
+        """Removes these places of the play order; the playing title stays."""
+        cur = self.order[self.index] if self.current else None
+        drop = {p for p in positions if p != self.index}
+        self.order = [q for p, q in enumerate(self.order) if p not in drop]
+        if cur is not None:
+            self.index = self.order.index(cur)
+        self._changed("queue")
+
+    def keep_positions(self, positions):
+        self.remove_positions([p for p in range(len(self.order)) if p not in set(positions) and p != self.index])
+
+    def rearrange(self, key=None, reverse=False, shuffle=False):
+        """Sorts (or mixes) the whole list; the playing title keeps playing at its new place."""
+        cur = self.order[self.index] if self.current else None
+        if shuffle:
+            random.shuffle(self.order)
+        else:
+            self.order.sort(key=lambda q: key(self.queue[q]), reverse=reverse) if key else self.order.reverse()
+        if cur is not None:
+            self.index = self.order.index(cur)
+        self._changed("queue")
+
+    def set_balance(self, b):
+        self.pan.set_property("panorama", max(-1.0, min(1.0, float(b)))); self._changed("balance")
+
     # ---------- equalizer ----------
     def set_eq(self, on, preamp, bands):
         for i, g in enumerate(bands):
@@ -207,6 +238,19 @@ class Player:
 
     # ---------- GStreamer ----------
     def _pcm(self, pad, info):
+        if self.want_wave:
+            import struct
+            buf = info.get_buffer()
+            caps = pad.get_current_caps()
+            ch = caps.get_structure(0).get_value("channels") if caps else 2
+            ok, m = buf.map(Gst.MapFlags.READ)
+            if ok:
+                n = len(m.data) // 4 // max(1, ch)
+                if n >= 76:
+                    step = n // 76
+                    floats = struct.unpack_from(f"<{n * ch}f", m.data)
+                    self.wave = [max(-1.0, min(1.0, sum(floats[(i * step) * ch:(i * step) * ch + ch]) / ch)) for i in range(76)]
+                buf.unmap(m)
         if self.pcm_listeners:
             buf = info.get_buffer()
             caps = pad.get_current_caps()

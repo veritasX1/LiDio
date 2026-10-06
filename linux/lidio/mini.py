@@ -2,12 +2,13 @@
 on glass), in the settings the Winamp mode with real Winamp 2 skins (.wsz) – main window, equalizer, playlist – like the
 Android app. Both are a window of their own; the big window can close meanwhile, the music plays on.
 "Always on top" is the desktop's business under Wayland: right-click the title area → "Immer im Vordergrund" (GNOME)."""
-import json, math, os, unicodedata, urllib.request, zipfile
+import json, math, os, threading, unicodedata, urllib.request, zipfile
+import cairo
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Adw, GdkPixbuf, GLib, Gtk, Gdk, Pango
+from gi.repository import Adw, GdkPixbuf, Gio, GLib, Gtk, Gdk, Pango
 
 from .covers import Cover
 from .player import REPEAT_OFF, REPEAT_ALL
@@ -236,40 +237,69 @@ class WinampWindow(Gtk.Window):
         self.bands = [float(x) for x in app._setting("eqBands", [0] * 10)]
         self.marquee, self.pressed, self.drag = 0, None, None
         self.peaks = [0.0] * 75
+        self.balance = float(app._setting("balance", 0))
+        # Visualizer like Android (card 3cf2eda4): 0 spectrum, 1 oscilloscope, 2 off; styles and peaks as Winamp 2.
+        self.vis = int(app._setting("winampVis", 0)); self.vis_style = int(app._setting("winampVisStil", 0))
+        self.vis_peaks = bool(app._setting("winampVisSpitzen", True)); self.vis_thick = bool(app._setting("winampDickeBalken", True))
+        self.scope = int(app._setting("winampOszi", 1))
+        # Playlist: taller in steps of 29 px (Winamp's resize grip), its own scroll position and selection.
+        self.pl_extra = int(app._setting("winampPlExtra", 0)); self.pl_top = None; self.pl_sel = set(); self.pointer = (0, 0)
+        self.pl_wide = int(app._setting("winampPlBreit", 0))      # playlist wider in steps of 25 px (Winamp's grip)
+        self.pl_menu = None                                        # an open sprite menu: (name, x, bottom y)
         self.area = Gtk.DrawingArea()
         self.area.set_draw_func(self._draw)
         self.set_child(self.area)
+        # Beside the 275-px windows (when the playlist is wider) the desktop shows through, as with Winamp.
+        css = Gtk.CssProvider(); css.load_from_string("window.winamp, window.winamp > * { background: transparent; box-shadow: none; }")
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.add_css_class("winamp")
         click = Gtk.GestureClick(button=0)
         click.connect("pressed", self._press); click.connect("released", self._release)
         self.area.add_controller(click)
         drag = Gtk.GestureDrag(); drag.connect("drag-update", self._drag_update); drag.connect("drag-end", self._drag_end)
         self.area.add_controller(drag)
         scroll = Gtk.EventControllerScroll(flags=Gtk.EventControllerScrollFlags.VERTICAL)
-        scroll.connect("scroll", lambda c, dx, dy: (self.player.set_volume(self.player.volume() - dy * 0.05), self.area.queue_draw(), True)[2])
+        scroll.connect("scroll", self._scrolled)
         self.area.add_controller(scroll)
         self.player.listeners.append(self._changed)
         self._frame = GLib.timeout_add(33, self._tick)
         self._scroll = GLib.timeout_add(220, self._marquee)
         self.connect("close-request", self._closing)
         self.player.set_eq(self.eq_on, self.preamp, self.bands)
+        self.player.set_balance(self.balance)
+        self.player.want_wave = self.vis == 1
+        motion = Gtk.EventControllerMotion()
+        motion.connect("motion", lambda c, x, y: (setattr(self, "pointer", (x / self.k, y / self.k)), self.pl_menu and self.area.queue_draw()))
+        self.area.add_controller(motion)
+        self.actions = Gio.SimpleActionGroup(); self.insert_action_group("wa", self.actions); self._actions()
         self._resize()
 
     # ---------- layout ----------
+    def _pl_height(self):
+        return 116 + 29 * self.pl_extra
+
     def _height(self):
-        return 116 + (116 if self.eq_open else 0) + (116 if self.pl_open else 0)
+        return 116 + (116 if self.eq_open else 0) + (self._pl_height() if self.pl_open else 0)
+
+    def _pl_width(self):
+        return 275 + 25 * self.pl_wide
 
     def _resize(self):
-        self.area.set_content_width(round(275 * self.k)); self.area.set_content_height(round(self._height() * self.k))
+        width = max(275, self._pl_width()) if self.pl_open else 275
+        self.area.set_content_width(round(width * self.k)); self.area.set_content_height(round(self._height() * self.k))
         self.area.queue_draw()
 
     def _save(self):
-        for k, v in (("winampEq", self.eq_open), ("winampPl", self.pl_open), ("eqAn", self.eq_on), ("eqPre", self.preamp), ("eqBands", self.bands)):
+        for k, v in (("winampEq", self.eq_open), ("winampPl", self.pl_open), ("eqAn", self.eq_on), ("eqPre", self.preamp), ("eqBands", self.bands),
+                     ("balance", self.balance), ("winampVis", self.vis), ("winampVisStil", self.vis_style), ("winampVisSpitzen", self.vis_peaks),
+                     ("winampDickeBalken", self.vis_thick), ("winampOszi", self.scope), ("winampPlExtra", self.pl_extra), ("winampPlBreit", self.pl_wide)):
             self.app._set(k, v)
 
     def _closing(self, *_):
         if self._changed in self.player.listeners:
             self.player.listeners.remove(self._changed)
         GLib.source_remove(self._frame); GLib.source_remove(self._scroll)
+        self.player.want_wave = False
         self._save()
         return False
 
@@ -312,7 +342,7 @@ class WinampWindow(Gtk.Window):
         cr.save()
         cr.rectangle(x, y, w, h); cr.clip()
         Gdk.cairo_set_source_pixbuf(cr, pb, x - px, y - py)
-        cr.get_source().set_filter(1)      # cairo.FILTER_NEAREST: crisp pixels
+        cr.get_source().set_filter(cairo.Filter.NEAREST)      # crisp pixels (card 3cf2eda4: 1 was GOOD = blurred)
         cr.paint()
         cr.restore()
 
@@ -328,10 +358,11 @@ class WinampWindow(Gtk.Window):
             row, col = cell
             cx = x + i * 5 - shift
             cr.save(); cr.rectangle(cx, y, 5, 6); cr.clip()
-            Gdk.cairo_set_source_pixbuf(cr, pb, cx - col * 5, y - row * 6); cr.get_source().set_filter(1); cr.paint(); cr.restore()
+            Gdk.cairo_set_source_pixbuf(cr, pb, cx - col * 5, y - row * 6); cr.get_source().set_filter(cairo.Filter.NEAREST); cr.paint(); cr.restore()
 
     def _draw(self, area, cr, w, h):
         cr.scale(self.k, self.k)
+        cr.set_antialias(cairo.Antialias.NONE)   # no blended seams between tiles (the playlist's light lines)
         self._regions = []
         self._main(cr)
         y = 116
@@ -339,6 +370,8 @@ class WinampWindow(Gtk.Window):
             cr.save(); cr.translate(0, y); self._eq(cr, y); cr.restore(); y += 116
         if self.pl_open:
             cr.save(); cr.translate(0, y); self._playlist(cr, y); cr.restore()
+            if self.pl_menu:
+                self._sprite_menu(cr)
 
     def _button(self, cr, name, x, y, action, down=None, oy=0):
         s = SPRITES[name]
@@ -375,13 +408,15 @@ class WinampWindow(Gtk.Window):
         vol = p.volume()
         self._sprite(cr, "MAIN_VOLUME_BACKGROUND", 107, 57, 68, 13, 0, round(vol * 27) * 15)
         self._sprite(cr, "MAIN_VOLUME_THUMB", 107 + round(vol * 51), 58)
-        self._sprite(cr, "MAIN_BALANCE_BACKGROUND", 177, 57, 38, 13, 0, 0)
-        self._sprite(cr, "MAIN_BALANCE_THUMB", 177 + 12, 58)
+        # Balance (card 50adb215): the background darkens towards the sides like Winamp's, the thumb travels 24 px.
+        self._sprite(cr, "MAIN_BALANCE_BACKGROUND", 177, 57, 38, 13, 0, round(abs(self.balance) * 27) * 15)
+        self._sprite(cr, "MAIN_BALANCE_THUMB_ACTIVE" if self.drag and self.drag[0] == "bal" else "MAIN_BALANCE_THUMB", 177 + round((self.balance + 1) / 2 * 24), 58)
         self._sprite(cr, "MAIN_POSITION_SLIDER_BACKGROUND", 16, 72)
         if t and p.length() > 0:
             f = self.drag[1] if self.drag and self.drag[0] == "pos" else min(1, p.position() / p.length())
             self._sprite(cr, "MAIN_POSITION_SLIDER_THUMB_SELECTED" if self.drag else "MAIN_POSITION_SLIDER_THUMB", 16 + round(f * 219), 72)
         self._regions += [(107, 57, 68, 13, ("slider", "vol"), None, None), (16, 72, 248, 10, ("slider", "pos"), None, None),
+                          (177, 57, 38, 13, ("slider", "bal"), None, None), (24, 43, 76, 16, "vis", None, None),
                           (36, 26, 63, 13, self._toggle_remaining, None, None), (0, 0, 240, 14, "move", None, None)]
         self._button(cr, "MAIN_OPTIONS_BUTTON", 6, 3, self._skin_dialog, "MAIN_OPTIONS_BUTTON_DEPRESSED")
         self._button(cr, "MAIN_MINIMIZE_BUTTON", 244, 3, lambda: self.app.present_window(), "MAIN_MINIMIZE_BUTTON_DEPRESSED")
@@ -406,28 +441,58 @@ class WinampWindow(Gtk.Window):
         self._regions.append((253, 91, 13, 15, lambda: (self.app.present_window(), self.close()), None, None))
 
     def _vis(self, cr):
+        """Winamp's visualizer at (24, 43), 76 × 16, as on Android: spectrum (normal/fire/line, thin/thick, peaks),
+        oscilloscope (dots/lines/solid) or off; colours from viscolor.txt (0 bg, 1 dots, 2–17 bars, 18–22 scope, 23 peaks)."""
         c = self.skin.vis
 
         def col(i):
             return c[i] if i < len(c) else c[-1]
-        cr.set_source_rgb(*col(0)); cr.rectangle(24, 43, 76, 16); cr.fill()
+
+        def dot(x, y, w, h, colour):
+            cr.set_source_rgb(*colour); cr.rectangle(24 + x, 43 + y, w, h); cr.fill()
+        if self.vis == 2:
+            return
+        dot(0, 0, 76, 16, col(0))
         cr.set_source_rgb(*col(1))
         for y in range(1, 16, 2):
             for x in range(1, 76, 2):
                 cr.rectangle(24 + x, 43 + y, 1, 1)
         cr.fill()
+        if self.vis == 1:
+            wave = self.player.wave if self.player.playing else [0.0] * 76
+            last = None
+            for x in range(76):
+                y = max(0, min(15, round(8 - wave[x] * 8)))
+
+                def shade(yy):
+                    return col(18 + min(4, abs(yy - 8) // 2))
+                if self.scope == 0:
+                    dot(x, y, 1, 1, shade(y))
+                elif self.scope == 2:
+                    for yy in range(min(8, y), max(8, y) + 1):
+                        dot(x, yy, 1, 1, shade(yy))
+                else:
+                    a = y if last is None else last
+                    for yy in range(min(a, y), max(a, y) + 1):
+                        dot(x, yy, 1, 1, shade(yy))
+                last = y
+            return
         spec = self.player.spectrum if self.player.playing else [0.0] * 75
-        # 19 thick bars of 3 pixels, as Winamp's default.
-        for b in range(19):
-            part = spec[b * 75 // 19 // 2: (b + 1) * 75 // 19 // 2 + 1] or [0]     # the lower half of the spectrum carries the music
-            v = max(part)
+        count = 19 if self.vis_thick else 75
+        width, pitch = (3, 4) if self.vis_thick else (1, 1)
+        for b in range(count):
+            # the lower half of the spectrum carries the music
+            lo, hi = b * 75 // count // 2, (b + 1) * 75 // count // 2 + 1
+            v = max(spec[lo:hi] or [0])
             h = min(16, round(v * 16 * 1.15))
             self.peaks[b] = max(h, self.peaks[b] - 0.35)
             for y in range(16 - h, 16):
-                cr.set_source_rgb(*col(2 + y)); cr.rectangle(24 + b * 4, 43 + y, 3, 1); cr.fill()
+                # Normal: colour by height on screen. Fire: from each bar's top down. Line: the whole bar in its top's colour.
+                i = {1: 2 + (y - (16 - h)), 2: 2 + (16 - h)}.get(self.vis_style, 2 + y)
+                dot(b * pitch, y, width, 1, col(max(2, min(17, i))))
             pk = round(self.peaks[b])
-            if pk > 0:
-                cr.set_source_rgb(*col(23)); cr.rectangle(24 + b * 4, 43 + 16 - pk, 3, 1); cr.fill()
+            if self.vis_peaks and pk > 0:
+                dot(b * pitch, max(0, min(15, 16 - pk)), width, 1, col(23))
 
     def _eq(self, cr, oy):
         self._sprite(cr, "EQ_WINDOW_BACKGROUND", 0, 0)
@@ -457,41 +522,361 @@ class WinampWindow(Gtk.Window):
         self._button(cr, "EQ_ON_BUTTON_SELECTED" if self.eq_on else "EQ_ON_BUTTON", 14, 18, self._toggle_eq_on,
                      "EQ_ON_BUTTON_SELECTED_DEPRESSED" if self.eq_on else "EQ_ON_BUTTON_DEPRESSED", oy)
         self._button(cr, "EQ_AUTO_BUTTON", 40, 18, lambda: None, "EQ_AUTO_BUTTON_DEPRESSED", oy)
-        self._button(cr, "EQ_PRESETS_BUTTON", 217, 18, self._eq_reset, "EQ_PRESETS_BUTTON_SELECTED", oy)
+        self._button(cr, "EQ_PRESETS_BUTTON", 217, 18, lambda: self._menu(self._presets_menu(), 217, 18 + oy + 12), "EQ_PRESETS_BUTTON_SELECTED", oy)
         self._button(cr, "EQ_CLOSE_BUTTON", 264, 3, self._toggle_eq, "EQ_CLOSE_BUTTON_ACTIVE", oy)
 
     def _playlist(self, cr, oy):
-        """Winamp's playlist editor, 275 × 116: the frame from pledit.bmp, the queue in the skin's colours."""
+        """Winamp's playlist editor, (275 + 25·m) × (116 + 29·n): frame from pledit.bmp, the list in a small unsmoothed
+        font like Winamp's, the five buttons with their sprite menus, mini transport, time, the small visualizer when wide
+        enough, scroll handle and the resize grip (cards 3cf2eda4, 299f6c4b)."""
+        W, H = self._pl_width(), self._pl_height(); bottom = H - 38
         self._sprite(cr, "PLAYLIST_TOP_LEFT_SELECTED", 0, 0)
-        for x in range(25, 250, 25):
+        for x in range(25, W - 25, 25):
             self._sprite(cr, "PLAYLIST_TOP_TILE_SELECTED", x, 0)
-        self._sprite(cr, "PLAYLIST_TITLE_BAR_SELECTED", 87, 0)
-        self._sprite(cr, "PLAYLIST_TOP_RIGHT_CORNER_SELECTED", 250, 0)
-        for y in range(20, 78, 29):
-            self._sprite(cr, "PLAYLIST_LEFT_TILE", 0, y, 12, min(29, 78 - y))
-            self._sprite(cr, "PLAYLIST_RIGHT_TILE", 255, y, 20, min(29, 78 - y))
-        self._sprite(cr, "PLAYLIST_BOTTOM_LEFT_CORNER", 0, 78)
-        self._sprite(cr, "PLAYLIST_BOTTOM_RIGHT_CORNER", 125, 78)
+        self._sprite(cr, "PLAYLIST_TITLE_BAR_SELECTED", (W - 100) // 2, 0)
+        self._sprite(cr, "PLAYLIST_TOP_RIGHT_CORNER_SELECTED", W - 25, 0)
+        for y in range(20, bottom, 29):
+            self._sprite(cr, "PLAYLIST_LEFT_TILE", 0, y, 12, min(29, bottom - y))
+            self._sprite(cr, "PLAYLIST_RIGHT_TILE", W - 20, y, 20, min(29, bottom - y))
+        self._sprite(cr, "PLAYLIST_BOTTOM_LEFT_CORNER", 0, bottom)
+        vis_room = W >= 350          # Winamp shows its small visualizer once the list is wide enough
+        for x in range(125, W - 150 - (75 if vis_room else 0), 25):
+            self._sprite(cr, "PLAYLIST_BOTTOM_TILE", x, bottom)
+        if vis_room:
+            self._sprite(cr, "PLAYLIST_VISUALIZER_BACKGROUND", W - 225, bottom)
+            self._mini_vis(cr, W - 225 + 3, bottom + 12)
+        self._sprite(cr, "PLAYLIST_BOTTOM_RIGHT_CORNER", W - 150, bottom)
         bg = self.skin.colors
-        cr.set_source_rgb(*bg["normalbg"]); cr.rectangle(12, 20, 243, 58); cr.fill()
+        lw, lh = W - 31, bottom - 20
+        cr.set_source_rgb(*bg["normalbg"]); cr.rectangle(12, 20, lw, lh); cr.fill()
         p = self.player
         rows = [(i, p.queue[q]) for i, q in enumerate(p.order)]
-        first = max(0, min(p.index - 2, len(rows) - 6)) if rows else 0
-        layout = Pango.Layout.new(self.area.get_pango_context())
-        layout.set_font_description(Pango.FontDescription.from_string("Sans 6.5"))
+        ROW = 13
+        visible = max(1, lh // ROW)
+        if self.pl_top is None:
+            first = max(0, min(p.index - 2, len(rows) - visible)) if rows else 0
+        else:
+            first = max(0, min(self.pl_top, max(0, len(rows) - visible)))
+        self._pl_first, self._pl_visible = first, visible
+        # The list at 1× without smoothing, then enlarged pixel by pixel – Winamp's crisp little font.
+        surface = cairo.ImageSurface(cairo.Format.ARGB32, lw, lh)
+        c2 = cairo.Context(surface); c2.set_antialias(cairo.Antialias.NONE)
+        from gi.repository import PangoCairo
+        layout = PangoCairo.create_layout(c2)
+        fo = cairo.FontOptions(); fo.set_antialias(cairo.Antialias.NONE); fo.set_hint_style(cairo.HintStyle.FULL); fo.set_hint_metrics(cairo.HintMetrics.ON)
+        PangoCairo.context_set_font_options(layout.get_context(), fo)
+        desc = Pango.FontDescription.from_string("Arial"); desc.set_absolute_size(10 * Pango.SCALE); layout.set_font_description(desc)
         from .window import clock
-        for n, (i, t) in enumerate(rows[first:first + 6]):
-            y = 21 + n * 9.5
-            if i == p.index:
-                cr.set_source_rgb(*bg["selectedbg"]); cr.rectangle(13, y, 241, 9.5); cr.fill()
-            cr.set_source_rgb(*(bg["current"] if i == p.index else bg["normal"]))
-            layout.set_text(f"{i + 1}. {t.artist} - {t.title}"[:46], -1)
-            cr.move_to(15, y); from gi.repository import PangoCairo; PangoCairo.show_layout(cr, layout)
-            layout.set_text(clock(t.duration), -1); cr.move_to(232, y); PangoCairo.show_layout(cr, layout)
-            self._regions.append((13, y + oy, 241, 9.5, ("jump", i), None, None))
-        self._regions.append((0, oy, 250, 14, "move", None, None))
+        for n, (i, t) in enumerate(rows[first:first + visible]):
+            y = n * ROW
+            if i in self.pl_sel:
+                c2.set_source_rgb(*bg["selectedbg"]); c2.rectangle(0, y, lw, ROW); c2.fill()
+            c2.set_source_rgb(*(bg["current"] if i == p.index else bg["normal"]))
+            layout.set_text(clock(t.duration), -1)
+            tw = layout.get_pixel_size()[0]
+            c2.move_to(lw - tw - 3, y + 1); PangoCairo.show_layout(c2, layout)
+            layout.set_text(f"{i + 1}. {t.artist} - {t.title}", -1)
+            layout.set_width((lw - tw - 12) * Pango.SCALE); layout.set_ellipsize(Pango.EllipsizeMode.END)
+            c2.move_to(3, y + 1); PangoCairo.show_layout(c2, layout)
+            layout.set_width(-1); layout.set_ellipsize(Pango.EllipsizeMode.NONE)
+            self._regions.append((12, 20 + y + oy, lw, ROW, ("jump", i), None, None))
+        cr.save(); cr.rectangle(12, 20, lw, lh); cr.clip()
+        cr.set_source_surface(surface, 12, 20); cr.get_source().set_filter(cairo.Filter.NEAREST); cr.paint(); cr.restore()
+        # Scroll handle on the right frame, where the list stands.
+        if len(rows) > visible:
+            f = first / max(1, len(rows) - visible)
+            self._sprite(cr, "PLAYLIST_SCROLL_HANDLE", W - 15, 20 + round(f * (bottom - 20 - 18)))
+        # The five buttons: each opens its sprite menu (Winamp's ADD, REM, SEL, MISC, LIST OPTS).
+        for x, name in ((14, "add"), (43, "rem"), (72, "sel"), (101, "misc"), (W - 46, "list")):
+            self._regions.append((x, bottom + 8 + oy, 25 if name != "list" else 22, 18, ("menu", name, x, bottom + 8 + oy), None, None))
+        # Mini transport: previous, play, pause, stop, next, eject (open LiDio).
+        R = W - 150
+        for k, (x, act) in enumerate(((R + 6, p.previous), (R + 14, p.resume), (R + 22, p.toggle), (R + 30, lambda: (p.pause(), p.seek(0))),
+                                      (R + 38, p.next), (R + 45, lambda: self.app.present_window()))):
+            self._regions.append((x, bottom + 22 + oy, 8 if k < 5 else 9, 8, act, None, None))
+        # The small time display next to them (tap: elapsed ↔ remaining, like the big one).
+        if p.current:
+            shown = max(0, p.length() - p.position()) if self.remaining else p.position()
+            m, sec = divmod(int(shown), 60)
+            self._text(cr, (("-" if self.remaining else "") + f"{m}:{sec:02d}").rjust(6), R + 64, bottom + 23, 6)
+        self._regions.append((R + 64, bottom + 22 + oy, 30, 8, self._toggle_remaining, None, None))
+        # The info field above: length of the selection / of the whole list, as Winamp; tap: Titel-Info.
+        total = sum(int(p.queue[q].duration or 0) for q in p.order)
+        chosen = sum(int(p.queue[p.order[i]].duration or 0) for i in self.pl_sel if 0 <= i < len(p.order))
+        self._text(cr, f"{clock(chosen)}/{clock(total)}"[:22], R + 8, bottom + 10, 22)
+        self._regions.append((R + 6, bottom + 7 + oy, 88, 10, self._info, None, None))
+        self._regions.append((W - 20, H - 20 + oy, 20, 20, "resize", None, None))
+        self._regions.append((0, oy, W - 25, 14, "move", None, None))
+        self._pl_oy = oy
 
-    # ---------- actions ----------
+    def _mini_vis(self, cr, x0, y0):
+        """The playlist's small analyzer (72 × 16), when the list is wide: thick bars in the skin's colours."""
+        c = self.skin.vis
+        spec = self.player.spectrum if self.player.playing else [0.0] * 75
+        for b in range(18):
+            v = max(spec[b * 2: b * 2 + 3] or [0]); h = min(16, round(v * 16 * 1.15))
+            for y in range(16 - h, 16):
+                cr.set_source_rgb(*(c[2 + y] if 2 + y < len(c) else c[-1])); cr.rectangle(x0 + b * 4, y0 + y, 3, 1); cr.fill()
+
+    # Winamp's sprite menus above the buttons (top → bottom), as in Webamp (card 299f6c4b).
+    SPRITE_MENUS = {
+        "add": ("PLAYLIST_ADD_MENU_BAR", [("PLAYLIST_ADD_URL", "aehnliche"), ("PLAYLIST_ADD_DIR", "mediathek"), ("PLAYLIST_ADD_FILE", "mediathek")]),
+        "rem": ("PLAYLIST_REMOVE_MENU_BAR", [("PLAYLIST_REMOVE_MISC", "+remmisc"), ("PLAYLIST_REMOVE_ALL", "alleentfernen"),
+                                             ("PLAYLIST_CROP", "zuschneiden"), ("PLAYLIST_REMOVE_SELECTED", "entfernen")]),
+        "sel": ("PLAYLIST_SELECT_MENU_BAR", [("PLAYLIST_INVERT_SELECTION", "umkehren"), ("PLAYLIST_SELECT_ZERO", "keine"), ("PLAYLIST_SELECT_ALL", "alle")]),
+        "misc": ("PLAYLIST_MISC_MENU_BAR", [("PLAYLIST_SORT_LIST", "+sort"), ("PLAYLIST_FILE_INFO", "info"), ("PLAYLIST_MISC_OPTIONS", "+miscopts")]),
+        "list": ("PLAYLIST_LIST_BAR", [("PLAYLIST_NEW_LIST", "leeren"), ("PLAYLIST_SAVE_LIST", "sichern"), ("PLAYLIST_LOAD_LIST", "+laden")]),
+    }
+
+    def _sprite_menu(self, cr):
+        name, x, y = self.pl_menu
+        bar, items = self.SPRITE_MENUS[name]
+        top = y + 18 - 18 * len(items)
+        self._sprite(cr, bar, x - 3, top)
+        px, py = self.pointer
+        for i, (sprite, action) in enumerate(items):
+            iy = top + i * 18
+            hover = x <= px < x + 22 and iy <= py < iy + 18
+            self._sprite(cr, sprite + "_SELECTED" if hover else sprite, x, iy)
+            self._regions.append((x, iy, 22, 18, ("menuitem", action, x, iy), None, None))
+
+    def _menu_item(self, action, x, y):
+        self.pl_menu = None
+        if not action.startswith("+"):
+            self.actions.activate_action(action, None); self.area.queue_draw(); return
+        sub = Gio.Menu()
+        if action == "+sort":
+            for label, a in ((_("Nach Titel"), "wa.nachtitel"), (_("Nach Interpret"), "wa.nachinterpret"), (_("Nach Album"), "wa.nachalbum"),
+                             (_("Reihenfolge umkehren"), "wa.reihenfolge"), (_("Mischen"), "wa.mischen")):
+                sub.append(label, a)
+        elif action == "+remmisc":
+            sub.append(_("Doppelte entfernen"), "wa.doppelte"); sub.append(_("Schon Gespieltes entfernen"), "wa.gespielt")
+        elif action == "+miscopts":
+            sub.append(_("HTML-Playlist erzeugen"), "wa.html")
+        elif action == "+laden":
+            self._load_menu(x, y); return
+        self._menu(sub, x + 22, y + 9)
+
+    def _load_menu(self, x, y):
+        server = self.player.server or getattr(self.app, "server", None)
+        if not server:
+            return
+        def work():
+            try:
+                lists = server.playlists()
+            except Exception:
+                return
+            def show():
+                sub = Gio.Menu()
+                for pl in lists[:40]:
+                    sub.append(pl.name, f"wa.laden::{pl.id}")
+                self._menu(sub, x + 22, y + 9)
+                return False
+            GLib.idle_add(show)
+        threading.Thread(target=work, daemon=True).start()
+
+    # ---------- menus (cards 299f6c4b, presets) ----------
+    def _actions(self):
+        p = self.player
+
+        def add(name, cb, kind=None, state=None):
+            if kind:
+                a = Gio.SimpleAction.new_stateful(name, GLib.VariantType.new(kind), state)
+                a.connect("activate", lambda a, v: (a.set_state(v), cb(v)))
+            else:
+                a = Gio.SimpleAction.new(name, None); a.connect("activate", lambda *_: cb())
+            self.actions.add_action(a)
+        sel = lambda: sorted(self.pl_sel)
+        add("mediathek", lambda: self.app.present_window())
+        add("aehnliche", self._add_similar)
+        add("entfernen", lambda: (p.remove_positions(sel()), self.pl_sel.clear()))
+        add("zuschneiden", lambda: (p.keep_positions(sel()), self.pl_sel.clear()))
+        add("alleentfernen", lambda: (p.keep_positions([]), self.pl_sel.clear()))
+        add("alle", lambda: self.pl_sel.update(range(len(p.order))))
+        add("keine", lambda: self.pl_sel.clear())
+        add("umkehren", lambda: setattr(self, "pl_sel", set(range(len(p.order))) - self.pl_sel))
+        add("nachtitel", lambda: p.rearrange(lambda t: (t.title or "").lower()))
+        add("nachinterpret", lambda: p.rearrange(lambda t: ((t.artist or "").lower(), (t.album or "").lower())))
+        add("nachalbum", lambda: p.rearrange(lambda t: ((t.album or "").lower(), getattr(t, "number", 0) or 0)))
+        add("reihenfolge", lambda: p.rearrange())
+        add("mischen", lambda: p.rearrange(shuffle=True))
+        add("info", self._info)
+        add("sichern", self._save_list)
+        add("leeren", lambda: (p.keep_positions([]), self.pl_sel.clear()))
+        add("preset", lambda v: self._preset(v.get_string()), "s", GLib.Variant("s", ""))
+        add("laden", lambda v: self._load_playlist(v.get_string()), "s", GLib.Variant("s", ""))
+        add("doppelte", self._remove_duplicates)
+        add("gespielt", lambda: p.remove_positions(range(p.index)))
+        add("html", self._html_playlist)
+        add("flach", self._eq_reset)
+        add("presetsichern", self._save_preset)
+        add("anzeige", lambda v: self._vis_set(vis=int(v.get_string())), "s", GLib.Variant("s", str(self.vis)))
+        add("stil", lambda v: self._vis_set(style=int(v.get_string())), "s", GLib.Variant("s", str(self.vis_style)))
+        add("balken", lambda v: self._vis_set(thick=v.get_string() == "1"), "s", GLib.Variant("s", "1" if self.vis_thick else "0"))
+        add("oszi", lambda v: self._vis_set(scope=int(v.get_string())), "s", GLib.Variant("s", str(self.scope)))
+        add("spitzen", lambda v: self._vis_set(peaks=v.get_string() == "1"), "s", GLib.Variant("s", "1" if self.vis_peaks else "0"))
+
+    def _menu(self, model, x, y):
+        pop = Gtk.PopoverMenu.new_from_model(model)
+        pop.set_parent(self.area)
+        r = Gdk.Rectangle(); r.x, r.y, r.width, r.height = round(x * self.k), round(y * self.k), 1, 1
+        pop.set_pointing_to(r); pop.set_has_arrow(False)
+        pop.connect("closed", lambda q: (GLib.idle_add(q.unparent), self.area.queue_draw()))
+        pop.popup()
+
+    def _presets_menu(self):
+        from .eqpresets import PRESETS
+        m = Gio.Menu()
+        m.append(_("Zurücksetzen (flach)"), "wa.flach")
+        builtin = Gio.Menu()
+        for name, _b in PRESETS:
+            builtin.append(name, f"wa.preset::{name}")
+        m.append_section(_("Winamp"), builtin)
+        own = self.app._setting("eqEigene", {}) or {}
+        if own:
+            mine = Gio.Menu()
+            for name in sorted(own):
+                mine.append(name, f"wa.preset::{name}")
+            m.append_section(_("Eigene"), mine)
+        m.append(_("Aktuelle Einstellung sichern …"), "wa.presetsichern")
+        return m
+
+    def _vis_menu(self):
+        m = Gio.Menu()
+        def section(title, action, labels):
+            sub = Gio.Menu()
+            for i, label in enumerate(labels):
+                sub.append(label, f"wa.{action}::{i}")
+            m.append_section(title, sub)
+        section(_("Anzeige"), "anzeige", [_("Spektrum"), _("Oszilloskop"), _("Aus")])
+        section(_("Spektrum"), "stil", [_("Normal"), "Fire", "Line"])
+        section(_("Balken"), "balken", [_("Dünn"), _("Dick")])
+        section(_("Oszilloskop"), "oszi", ["Dots", "Lines", "Solid"])
+        section(_("Spitzen"), "spitzen", [_("Aus"), _("An")])
+        return m
+
+    def _vis_set(self, vis=None, style=None, thick=None, scope=None, peaks=None):
+        if vis is not None:
+            self.vis = vis; self.player.want_wave = vis == 1
+        if style is not None:
+            self.vis_style = style
+        if thick is not None:
+            self.vis_thick = thick; self.peaks = [0.0] * 75
+        if scope is not None:
+            self.scope = scope
+        if peaks is not None:
+            self.vis_peaks = peaks
+        for name, value in (("anzeige", str(self.vis)), ("stil", str(self.vis_style)), ("balken", "1" if self.vis_thick else "0"),
+                            ("oszi", str(self.scope)), ("spitzen", "1" if self.vis_peaks else "0")):
+            self.actions.lookup_action(name).set_state(GLib.Variant("s", value))
+        self._save(); self.area.queue_draw()
+
+    def _preset(self, name):
+        from .eqpresets import PRESETS
+        bands = dict(PRESETS).get(name) or (self.app._setting("eqEigene", {}) or {}).get(name)
+        if bands is None:
+            return
+        self.bands = [float(b) for b in bands]; self.preamp = 0.0; self.eq_on = True
+        self.player.set_eq(self.eq_on, self.preamp, self.bands); self._save(); self.area.queue_draw()
+
+    def _ask_name(self, title, done, text=""):
+        dialog = Adw.AlertDialog(heading=title)
+        entry = Gtk.Entry(text=text, activates_default=True)
+        dialog.set_extra_child(entry)
+        dialog.add_response("cancel", _("Abbrechen")); dialog.add_response("ok", _("Sichern"))
+        dialog.set_response_appearance("ok", Adw.ResponseAppearance.SUGGESTED); dialog.set_default_response("ok")
+        dialog.connect("response", lambda d, r: done(entry.get_text().strip()) if r == "ok" and entry.get_text().strip() else None)
+        dialog.present(self)
+
+    def _save_preset(self):
+        def keep(name):
+            own = dict(self.app._setting("eqEigene", {}) or {}); own[name] = list(self.bands); self.app._set("eqEigene", own)
+        self._ask_name(_("Equalizer-Einstellung sichern"), keep, _("Mein Klang"))
+
+    def _save_list(self):
+        p = self.player
+        tracks = [p.queue[q] for q in p.order]
+        if not tracks or not p.server:
+            return
+        def create(name):
+            def work():
+                try:
+                    p.server.create_playlist(name, tracks)
+                    GLib.idle_add(lambda: (self.app.notify(_("Playlist „{name}“ gesichert.").format(name=name)) if hasattr(self.app, "notify") else None, False)[-1])
+                except Exception:
+                    pass
+            threading.Thread(target=work, daemon=True).start()
+        self._ask_name(_("Liste als Playlist sichern"), create, _("Winamp-Liste"))
+
+    def _load_playlist(self, pid):
+        server = self.player.server or getattr(self.app, "server", None)
+        def work():
+            try:
+                _pl, tracks = server.playlist(pid)
+            except Exception:
+                return
+            GLib.idle_add(lambda: (self.player.play(server, tracks) if tracks else None, setattr(self, "pl_top", None), False)[-1])
+        threading.Thread(target=work, daemon=True).start()
+
+    def _remove_duplicates(self):
+        p, seen, drop = self.player, set(), []
+        for pos, q in enumerate(p.order):
+            t = p.queue[q]; key = ((t.artist or "").lower(), (t.title or "").lower())
+            if key in seen:
+                drop.append(pos)
+            seen.add(key)
+        p.remove_positions(drop)
+
+    def _html_playlist(self):
+        """Winamp's "Generate HTML playlist": the list as a page, opened in the browser (written to the cache only)."""
+        import html as h
+        from .window import clock
+        p = self.player
+        rows = "".join(f"<li>{h.escape(t.artist or '')} – {h.escape(t.title or '')} <span>{clock(t.duration)}</span></li>" for t in (p.queue[q] for q in p.order))
+        total = clock(sum(int(p.queue[q].duration or 0) for q in p.order))
+        page = (f"<!doctype html><meta charset=utf-8><title>LiDio – Playlist</title><style>body{{background:#000;color:#0f0;font:13px Arial;padding:16px}}"
+                f"h1{{color:#fff;font-size:18px}}span{{color:#888;float:right}}li{{max-width:640px}}</style><h1>Playlist</h1>"
+                f"<p>{len(p.order)} {_('Titel')}, {total}</p><ol>{rows}</ol>")
+        path = os.path.join(GLib.get_user_cache_dir(), "lidio", "playlist.html")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        open(path, "w", encoding="utf-8").write(page)
+        Gtk.FileLauncher.new(Gio.File.new_for_path(path)).launch(self, None, None, None)
+
+    def _add_similar(self):
+        p = self.player
+        if not (p.current and p.server):
+            return
+        known = {t.id for t in p.queue}
+        def work():
+            try:
+                more = [t for t in p.server.similar(p.current, 15) if t.id not in known]
+            except Exception:
+                return
+            GLib.idle_add(lambda: (p.add(more) if more else None, False)[-1])
+        threading.Thread(target=work, daemon=True).start()
+
+    def _info(self):
+        p = self.player
+        pos = min(self.pl_sel) if self.pl_sel else p.index
+        if not (0 <= pos < len(p.order)):
+            return
+        t = p.queue[p.order[pos]]
+        from .window import clock
+        dialog = Adw.AlertDialog(heading=t.title or "", body="\n".join(x for x in (t.artist, t.album, clock(t.duration)) if x))
+        dialog.add_response("ok", _("OK")); dialog.present(self)
+
+    def _scrolled(self, c, dx, dy):
+        x, y = self.pointer
+        top = 116 + (116 if self.eq_open else 0)
+        if self.pl_open and top + 20 <= y < top + self._pl_height() - 38:
+            # Over the list: scroll it (Winamp) – not the volume.
+            first = getattr(self, "_pl_first", 0)
+            self.pl_top = max(0, first + (1 if dy > 0 else -1) * 3)
+        else:
+            self.player.set_volume(self.player.volume() - dy * 0.05)
+        self.area.queue_draw()
+        return True
+
     def _toggle_remaining(self):
         self.remaining = not self.remaining
 
@@ -521,6 +906,8 @@ class WinampWindow(Gtk.Window):
 
     def _press(self, g, n, x, y):
         r, lx, ly = self._hit(x, y)
+        if self.pl_menu and not (r and isinstance(r[4], tuple) and r[4][0] in ("menu", "menuitem")):
+            self.pl_menu = None; self.area.queue_draw()
         if not r:
             return
         action = r[4]
@@ -530,9 +917,32 @@ class WinampWindow(Gtk.Window):
         if isinstance(action, tuple) and action[0] == "slider":
             self._slide(action[1], r, lx, ly); return
         if isinstance(action, tuple) and action[0] == "jump":
+            i = action[1]
             if n == 2:
-                self.player.jump(self.player.order[action[1]])
+                self.player.jump(self.player.order[i]); self.pl_top = None
+            else:
+                # Click selects, Strg+click adds/removes, like Winamp.
+                state = g.get_current_event_state()
+                if state & Gdk.ModifierType.CONTROL_MASK:
+                    self.pl_sel ^= {i}
+                else:
+                    self.pl_sel = {i}
+            self.area.queue_draw()
             return
+        if action == "vis":
+            if g.get_current_button() == 3:
+                self._menu(self._vis_menu(), lx + 24, ly + 43)
+            else:
+                self._vis_set(vis=(self.vis + 1) % 3)
+            return
+        if isinstance(action, tuple) and action[0] == "menu":
+            # Toggle Winamp's sprite menu above this button.
+            self.pl_menu = None if self.pl_menu and self.pl_menu[0] == action[1] else (action[1], action[2], action[3])
+            self.area.queue_draw(); return
+        if isinstance(action, tuple) and action[0] == "menuitem":
+            self._menu_item(action[1], action[2], action[3]); return
+        if action == "resize":
+            self._resizing = (x, y, self.pl_extra, self.pl_wide); return
         if g.get_current_button() == 3:
             self._skin_dialog(); return
         self.pressed = (r[0], r[1]); self.area.queue_draw()
@@ -550,6 +960,14 @@ class WinampWindow(Gtk.Window):
         self._slide_to(lx, ly)
 
     def _drag_update(self, g, dx, dy):
+        if getattr(self, "_resizing", None):
+            # Winamp's grip: the playlist grows and shrinks in steps of 29 px.
+            _x0, _y0, extra0, wide0 = self._resizing
+            extra = max(0, min(20, extra0 + round(dy / self.k / 29)))
+            wide = max(0, min(24, wide0 + round(dx / self.k / 25)))
+            if (extra, wide) != (self.pl_extra, self.pl_wide):
+                self.pl_extra, self.pl_wide = extra, wide; self._resize()
+            return
         if not getattr(self, "_slider", None):
             return
         ok, x0, y0 = g.get_start_point()
@@ -558,10 +976,15 @@ class WinampWindow(Gtk.Window):
 
     def _slide_to(self, lx, ly):
         key, rx, ry, rw, rh = self._slider
-        if key in ("vol", "pos"):
+        if key in ("vol", "pos", "bal"):
             f = max(0.0, min(1.0, lx / rw))
             if key == "vol":
                 self.player.set_volume(f)
+            elif key == "bal":
+                b = f * 2 - 1
+                self.balance = 0.0 if abs(b) < 0.12 else b      # snaps to the middle, as Winamp's does
+                self.drag = ("bal", self.balance)
+                self.player.set_balance(self.balance)
             else:
                 self.drag = ("pos", f)
         else:
@@ -575,10 +998,12 @@ class WinampWindow(Gtk.Window):
         self.area.queue_draw()
 
     def _drag_end(self, g, dx, dy):
+        if getattr(self, "_resizing", None):
+            self._resizing = None; self._save(); return
         if self.drag and self.drag[0] == "pos" and self.player.current:
             self.player.seek(self.drag[1] * self.player.length())
         if self.drag and self.drag[0] != "pos":
-            self._save()
+            self._save()   # equalizer bands and balance are kept
         self.drag, self._slider = None, None
         self.area.queue_draw()
 

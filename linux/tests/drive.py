@@ -163,6 +163,23 @@ def step(i=0):
         print("mini", width, height, m.get_mapped(), node, flush=True)
         if node:
             m.get_renderer().render_texture(node, Graphene.Rect().init(0, 0, width, height)).save_to_png(os.path.join(out, arg + ".png")); print("Bild:", arg, flush=True)
+    elif s.startswith("wa:"):
+        # Winamp window: wa:vis=<0-2>, wa:bal=<-1…1>, wa:preset=<name>, wa:extra=<n>, wa:sel=<i,j>, wa:sort=<titel|interpret>
+        m, (key, _, val) = app.mini, arg.partition("=")
+        if key == "vis": m._vis_set(vis=int(val))
+        elif key == "thin": m._vis_set(thick=False)
+        elif key == "bal": m.balance = float(val); m.player.set_balance(m.balance); m.area.queue_draw()
+        elif key == "preset": m._preset(val)
+        elif key == "extra": m.pl_extra = int(val); m._resize()
+        elif key == "wide": m.pl_wide = int(val); m._resize()
+        elif key == "menu":
+            bottom = 116 + (116 if m.eq_open else 0) + m._pl_height() - 38 + 8
+            x = {"add": 14, "rem": 43, "sel": 72, "misc": 101}.get(val, m._pl_width() - 46)
+            m.pl_menu = (val, x, bottom); m.pointer = (x + 5, bottom - 10); m.area.queue_draw()
+        elif key == "sel": m.pl_sel = {int(x) for x in val.split(",")}; m.area.queue_draw()
+        elif key == "remove": m.actions.activate_action("entfernen", None)
+        elif key == "sort": m.actions.activate_action("nachtitel" if val == "titel" else "nachinterpret", None)
+        print("pan:", round(m.player.pan.get_property("panorama"), 2), "bands:", m.bands[:3], "rows:", len(m.player.order), flush=True)
     elif s == "hover":
         app.mini.add_css_class("hover")
     elif s.startswith("scope:"):

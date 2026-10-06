@@ -22,8 +22,8 @@ android {
         applicationId = "io.github.veritasx1.lidio"
         minSdk = 29
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.4b"
+        versionCode = 7
+        versionName = "0.4.1b"
     }
 
     // "oeffentlich" is LiDio as published. A further variant exists only where its own build file is present (privat.gradle.kts).

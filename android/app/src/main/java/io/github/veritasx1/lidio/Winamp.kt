@@ -36,6 +36,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -174,6 +176,20 @@ class WinampSettings(context: Context) {
     var visPeaks by mutableStateOf(prefs.getBoolean("visSpitzen", true))
     var visThick by mutableStateOf(prefs.getBoolean("dickeBalken", true))
     var scopeStyle by mutableIntStateOf(prefs.getInt("oszi", 1))
+    /** Own equalizer presets (name → 10 bands), kept like Winamp's „Save preset“. */
+    val custom = mutableStateMapOf<String, List<Float>>().apply {
+        runCatching { val o = org.json.JSONObject(prefs.getString("eigene", "{}") ?: "{}")
+            o.keys().forEach { k -> val a = o.getJSONArray(k); put(k, List(a.length()) { a.getDouble(it).toFloat() }) } }
+    }
+
+    fun applyPreset(values: List<Float>) {
+        preamp = 0f; values.forEachIndexed { i, v -> if (i < bands.size) bands[i] = v }; eqOn = true; save()
+    }
+
+    fun keepPreset(name: String) {
+        custom[name] = bands.toList()
+        prefs.edit().putString("eigene", org.json.JSONObject().apply { custom.forEach { (k, v) -> put(k, org.json.JSONArray(v.map { it.toDouble() })) } }.toString()).apply()
+    }
 
     fun save() {
         prefs.edit().putBoolean("an", on).putBoolean("eq", eq).putBoolean("pl", playlist).putBoolean("milk", milk).putBoolean("eqAn", eqOn)
@@ -533,6 +549,8 @@ val EQ_BANDS = listOf("60", "170", "310", "600", "1K", "3K", "6K", "12K", "14K",
 private fun EqWindow(state: AppState, skin: Skin, k: Scale) {
     val w = state.winamp
     var dragging by remember { mutableIntStateOf(-2) }
+    var presets by remember { mutableStateOf(false) }
+    if (presets) EqPresets(w) { presets = false }
     Box(Modifier.window(k, 275, 116)) {
         Canvas(Modifier.window(k, 275, 116)) {
             at(skin, k, "EQ_WINDOW_BACKGROUND", 0, 0)
@@ -553,15 +571,68 @@ private fun EqWindow(state: AppState, skin: Skin, k: Scale) {
             if (w.eqOn) "EQ_ON_BUTTON_SELECTED_DEPRESSED" else "EQ_ON_BUTTON_DEPRESSED", if (w.eqOn) "an" else "aus") { w.eqOn = !w.eqOn; w.save() }
         SkinButton(skin, k, if (w.eqAuto) "EQ_AUTO_BUTTON_SELECTED" else "EQ_AUTO_BUTTON", 40, 18, "Automatisch",
             if (w.eqAuto) "EQ_AUTO_BUTTON_SELECTED_DEPRESSED" else "EQ_AUTO_BUTTON_DEPRESSED", if (w.eqAuto) "an" else "aus") { w.eqAuto = !w.eqAuto; w.save() }
-        SkinButton(skin, k, "EQ_PRESETS_BUTTON", 217, 18, tr("Voreinstellungen: alles auf 0"), "EQ_PRESETS_BUTTON_SELECTED") {
-            w.preamp = 0f; for (i in w.bands.indices) w.bands[i] = 0f; w.save()
-        }
+        SkinButton(skin, k, "EQ_PRESETS_BUTTON", 217, 18, tr("Voreinstellungen"), "EQ_PRESETS_BUTTON_SELECTED") { presets = true }
         SkinButton(skin, k, "EQ_CLOSE_BUTTON", 264, 3, tr("Equalizer ausblenden"), "EQ_CLOSE_BUTTON_ACTIVE") { w.eq = false; w.save() }
         fun db(v: Float) = ((v * 24f - 12f) * 2).roundToInt() / 2f   // half-dB steps; 0 snaps
         Box(Modifier.place(k, 21, 38, 14, 63).slide({ (w.preamp + 12f) / 24f }, tr("Vorverstärkung"), vertical = true,
             change = { dragging = -1; w.preamp = db(it); Dsp.set(w.eqOn, w.preamp, w.bands.toList(), w.balance) }, release = { dragging = -2; w.save() }))
         for (i in 0 until 10) Box(Modifier.place(k, 78 + i * 18, 38, 14, 63).slide({ (w.bands[i] + 12f) / 24f }, tr("{value} Hz", "value" to (EQ_BANDS[i])),
             vertical = true, change = { dragging = i; w.bands[i] = db(it); Dsp.set(w.eqOn, w.preamp, w.bands.toList(), w.balance) }, release = { dragging = -2; w.save() }))
+    }
+}
+
+/** Winamp's built-in equalizer presets (winamp.q1, dB for 60 Hz … 16 kHz, clamped to ±12) – the same as on Ubuntu. */
+val EQ_PRESETS: List<Pair<String, List<Float>>> = listOf(
+    "Classical" to listOf(0f, 0f, 0f, 0f, 0f, 0f, -7.2f, -7.2f, -7.2f, -9.6f),
+    "Club" to listOf(0f, 0f, 8f, 5.6f, 5.6f, 5.6f, 3.2f, 0f, 0f, 0f),
+    "Dance" to listOf(9.6f, 7.2f, 2.4f, 0f, 0f, -5.6f, -7.2f, -7.2f, 0f, 0f),
+    "Full Bass" to listOf(-8f, 9.6f, 9.6f, 5.6f, 1.6f, -4f, -8f, -10.4f, -11.2f, -11.2f),
+    "Full Bass & Treble" to listOf(7.2f, 5.6f, 0f, -7.2f, -4.8f, 1.6f, 8f, 11.2f, 12f, 12f),
+    "Full Treble" to listOf(-9.6f, -9.6f, -9.6f, -4f, 2.4f, 11.2f, 12f, 12f, 12f, 12f),
+    "Laptop Speakers / Headphone" to listOf(4.8f, 11.2f, 5.6f, -3.2f, -2.4f, 1.6f, 4.8f, 9.6f, 12f, 12f),
+    "Large Hall" to listOf(10.4f, 10.4f, 5.6f, 5.6f, 0f, -4.8f, -4.8f, -4.8f, 0f, 0f),
+    "Live" to listOf(-4.8f, 0f, 4f, 5.6f, 5.6f, 5.6f, 4f, 2.4f, 2.4f, 2.4f),
+    "Party" to listOf(7.2f, 7.2f, 0f, 0f, 0f, 0f, 0f, 0f, 7.2f, 7.2f),
+    "Pop" to listOf(-1.6f, 4.8f, 7.2f, 8f, 5.6f, 0f, -2.4f, -2.4f, -1.6f, -1.6f),
+    "Reggae" to listOf(0f, 0f, 0f, -5.6f, 0f, 6.4f, 6.4f, 0f, 0f, 0f),
+    "Rock" to listOf(8f, 4.8f, -5.6f, -8f, -3.2f, 4f, 8.8f, 11.2f, 11.2f, 11.2f),
+    "Ska" to listOf(-2.4f, -4.8f, -4f, 0f, 4f, 5.6f, 8.8f, 9.6f, 11.2f, 9.6f),
+    "Soft" to listOf(4.8f, 1.6f, 0f, -2.4f, 0f, 4f, 8f, 9.6f, 11.2f, 12f),
+    "Soft Rock" to listOf(4f, 4f, 2.4f, 0f, -4f, -5.6f, -3.2f, 0f, 2.4f, 8.8f),
+    "Techno" to listOf(8f, 5.6f, 0f, -5.6f, -4.8f, 0f, 8f, 9.6f, 9.6f, 8.8f),
+)
+
+/** PRESETS: Winamp's list, own presets, „Zurücksetzen“ and „Aktuelle sichern …“ – as an Apple sheet. */
+@Composable
+private fun EqPresets(w: WinampSettings, onClose: () -> Unit) {
+    val ink = Ink
+    var naming by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+        Column(Modifier.widthIn(max = 340.dp).heightIn(max = 560.dp).clip(RoundedCornerShape(14.dp)).background(ink.elevated)) {
+            Label(tr("Equalizer-Voreinstellungen"), 17f, 600, modifier = Modifier.padding(16.dp))
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f, fill = false)) {
+                item { ListRow(tr("Zurücksetzen (flach)"), onClick = { w.applyPreset(List(10) { 0f }); onClose() }) }
+                if (w.custom.isNotEmpty()) {
+                    item { Label(tr("EIGENE"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)) }
+                    w.custom.keys.sorted().forEach { n -> item { ListRow(n, onClick = { w.applyPreset(w.custom[n]!!); onClose() }) } }
+                }
+                item { Label("WINAMP", 13f, color = ink.secondary, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)) }
+                EQ_PRESETS.forEach { (n, values) -> item { ListRow(n, onClick = { w.applyPreset(values); onClose() }) } }
+            }
+            if (naming) {
+                Row(Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    androidx.compose.foundation.text.BasicTextField(name, { name = it }, singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = ink.label, fontSize = androidx.compose.ui.unit.TextUnit(17f, androidx.compose.ui.unit.TextUnitType.Sp)),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(ink.tint),
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(ink.fill).padding(10.dp)
+                            .semantics { contentDescription = tr("Name") })
+                    Label(tr("Sichern"), 17f, 600, if (name.isNotBlank()) ink.tint else ink.tertiary,
+                        modifier = Modifier.padding(start = 12.dp).clickable(enabled = name.isNotBlank()) { w.keepPreset(name.trim()); onClose() })
+                }
+            } else ListRow(tr("Aktuelle Einstellung sichern …"), titleColor = ink.tint, separator = false, onClick = { naming = true })
+            ListRow(tr("Abbrechen"), titleColor = ink.tint, separator = false, onClick = onClose)
+        }
     }
 }
 
