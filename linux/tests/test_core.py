@@ -139,7 +139,7 @@ class ShareTest(unittest.TestCase):
     def test_round_trip_matches_android(self):
         from lidio.share import Shared
         s = Shared("ae0c2c1c", "t42", "Weißes Rauschen & mehr", "Anna Analog", "Rauschen #1")
-        self.assertTrue(s.link().startswith("https://lisoft.goip.de/lidio/t#s=ae0c2c1c&t=t42&n=Wei%C3%9Fes%20Rauschen%20%26%20mehr"))
+        self.assertTrue(s.link().startswith("https://lisoftware.de/lidio/t#s=ae0c2c1c&t=t42&n=Wei%C3%9Fes%20Rauschen%20%26%20mehr"))
         self.assertEqual(Shared.parse(s.link()), s)
         self.assertEqual(Shared.parse("lidio://t#n=Quinte&a=Die%20Testt%C3%B6ne").artist, "Die Testtöne")
         self.assertIsNone(Shared.parse("https://example.com/t#n=x"))

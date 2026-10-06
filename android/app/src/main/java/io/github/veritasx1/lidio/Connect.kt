@@ -67,7 +67,8 @@ fun Connect(onDone: (Account) -> Unit, onCancel: (() -> Unit)?, check: ((Account
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    val clean = address.trim().trimEnd('/').let { if (it.startsWith("http")) it else "https://$it" }
+                    // In the home network a server speaks plain http (Emby 8096, Navidrome 4533) – only names outside get https.
+                    val clean = address.trim().trimEnd('/').let { if (it.startsWith("http")) it else if (homeNetwork(it)) "http://$it" else "https://$it" }
                     val away = external.trim().trimEnd('/').let { if (it.isEmpty() || it.startsWith("http")) it else "https://$it" }
                     // Signing in works through whichever address answers now (at home the WLAN one, away the other).
                     val now = if (away.isNotEmpty() && !Reach.answers(kind, clean, 2500)) away else clean
@@ -153,4 +154,11 @@ private fun Field(label: String, value: String, onChange: (String) -> Unit, plac
 @Composable
 fun AppIcon(modifier: Modifier) {
     androidx.compose.foundation.Canvas(modifier.clip(RoundedCornerShape(22))) { drawLiDioIcon() }
+}
+
+/** An address in the own network: 192.168.x, 10.x, 172.16–31.x, a .local/.fritz.box name or a bare name without dots. */
+fun homeNetwork(address: String): Boolean {
+    val host = address.substringBefore('/').substringBefore(':').lowercase()
+    return host.startsWith("192.168.") || host.startsWith("10.") || Regex("""^172\.(1[6-9]|2\d|3[01])\.""").containsMatchIn(host) ||
+        host.endsWith(".local") || host.endsWith(".fritz.box") || host == "localhost" || (host.isNotEmpty() && '.' !in host)
 }

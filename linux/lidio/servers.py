@@ -53,6 +53,8 @@ class Playlist:
     cover_id: str | None = None
     missing: list = field(default_factory=list)   # "Interpret – Titel" the server lacks, from the description (like Android)
     origin: str | None = None                     # Deezer/Spotify link the playlist came from
+    mixtape: bool = False                         # card c9b15c67: marked as a Mixtape on the server
+    own_cover: bool = False                       # card 5d1ab4c8: the user chose its cover
 
 
 @dataclass
@@ -130,6 +132,13 @@ def _request(url, headers=None, data=None, method=None, timeout=20):
 def normal(address):
     a = address.strip().rstrip("/")
     return a if not a or "://" in a else "http://" + a
+
+
+MIXTAPE, OWN_COVER = "LiDio: Mixtape", "LiDio: eigenes Cover"
+
+
+def _tags_of(j):
+    return {t.get("Name") for t in j.get("TagItems") or []} | set(j.get("Tags") or [])
 
 
 class MediaBrowser:
@@ -210,14 +219,14 @@ class MediaBrowser:
     def playlists(self):
         views = self._get(f"/Users/{self.user_id}/Views").get("Items", [])
         folder = next((v["Id"] for v in views if v.get("CollectionType") == "playlists"), None)
-        items = self._items(ParentId=folder, SortBy="SortName", Fields="MediaType,Overview") if folder else \
-            self._items(IncludeItemTypes="Playlist", SortBy="SortName", Fields="MediaType,Overview")
+        items = self._items(ParentId=folder, SortBy="SortName", Fields="MediaType,Overview,Tags") if folder else \
+            self._items(IncludeItemTypes="Playlist", SortBy="SortName", Fields="MediaType,Overview,Tags")
         return [self._playlist(j) for j in items if j.get("MediaType") != "Video" and j.get("Type", "Playlist") == "Playlist"]
 
     @staticmethod
     def _playlist(j, count=0):
         return Playlist(j["Id"], j.get("Name") or "Playlist", count, j["Id"] if "Primary" in (j.get("ImageTags") or {}) else None,
-                        MissingNote.read(j.get("Overview")), MissingNote.origin(j.get("Overview")))
+                        MissingNote.read(j.get("Overview")), MissingNote.origin(j.get("Overview")), MIXTAPE in _tags_of(j), OWN_COVER in _tags_of(j))
 
     def playlist(self, playlist_id):
         p = self._get(f"/Users/{self.user_id}/Items/{playlist_id}")
@@ -231,8 +240,10 @@ class MediaBrowser:
     def create_playlist(self, name, tracks):
         ids = [t.id for t in tracks]
         first, rest = ids[:100], [ids[i:i + 100] for i in range(100, len(ids), 100)]
-        q = urllib.parse.urlencode({"Name": name, "Ids": ",".join(first), "UserId": self.user_id, "MediaType": "Audio"})
-        r = _request(f"{self.base}/Playlists?{q}", self._auth(), {"Name": name, "Ids": first, "UserId": self.user_id, "MediaType": "Audio"})
+        # An empty "Ids" makes Emby fail ("Unrecognized Guid format") – a new, empty Mixtape leaves it out.
+        params = {"Name": name, "UserId": self.user_id, "MediaType": "Audio", **({"Ids": ",".join(first)} if first else {})}
+        body = {"Name": name, "UserId": self.user_id, "MediaType": "Audio", **({"Ids": first} if first else {})}
+        r = _request(f"{self.base}/Playlists?{urllib.parse.urlencode(params)}", self._auth(), body)
         pid = (r or {}).get("Id") if isinstance(r, dict) else None
         if not pid:
             raise ServerError(_("Die Playlist wurde nicht angelegt."))
@@ -278,8 +289,31 @@ class MediaBrowser:
             time.sleep(1.5)
         return False
 
-    def set_playlist_cover(self, playlist_id, jpeg):
+    def set_playlist_cover(self, playlist_id, jpeg, own=False):
+        """own = chosen by the user (card 5d1ab4c8): marked on the server; automatic pictures never replace a marked one
+        (Olaf 06.10.2026: „selbst gewählte Playlist-Cover haben immer Vorrang“)."""
+        marked = OWN_COVER in _tags_of(self._get(f"/Users/{self.user_id}/Items/{playlist_id}"))
+        if marked and not own:
+            return False
         _request(f"{self.base}/Items/{playlist_id}/Images/Primary", {**self._auth(), "Content-Type": "image/jpeg"}, base64.b64encode(jpeg))
+        if own and not marked:
+            self._tag(playlist_id, OWN_COVER, True)
+        return True
+
+    def mark_mixtape(self, playlist_id, on=True):
+        self._tag(playlist_id, MIXTAPE, on)
+
+    def _tag(self, item_id, tag, on):
+        """Tags: Emby keeps them as "TagItems" ({Name}), Jellyfin as "Tags" (strings)."""
+        item = self._get(f"/Users/{self.user_id}/Items/{item_id}")
+        if (tag in _tags_of(item)) == on:
+            return
+        if self.kind == "emby":
+            items = [t for t in item.get("TagItems") or [] if t.get("Name") != tag]
+            item["TagItems"] = items + ([{"Name": tag}] if on else [])
+        else:
+            item["Tags"] = [t for t in item.get("Tags") or [] if t != tag] + ([tag] if on else [])
+        _request(f"{self.base}/Items/{item_id}", self._auth(), item)
 
     def note_missing(self, playlist_id, missing):
         item = self._get(f"/Users/{self.user_id}/Items/{playlist_id}")

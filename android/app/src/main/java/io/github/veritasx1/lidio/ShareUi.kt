@@ -32,6 +32,61 @@ suspend fun shareTrack(context: Context, state: AppState, server: MusicServer, t
     context.startActivity(Intent.createChooser(send, tr("Lied teilen")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
+/** "Als Datei teilen" (Olaf 05.10.2026): the song itself as "Interpret - Titel.mp3" with its details inside. Card da219e16:
+ *  it failed now and then, because only the server's MP3 conversion was tried (slow or refused for some files) and a title on
+ *  the phone was fetched again. Now in this order, the first that works: the file on the phone (download, completely heard,
+ *  or loaded from the internet) → the server's MP3 → the original file from the server. Only to the chosen app. */
+suspend fun shareFile(context: Context, state: AppState, server: MusicServer, track: Track) {
+    val name = "${track.artist} - ${track.title}".replace(Regex("""[\\/:*?"<>|]+"""), "_").trim().take(120)
+    val dir = java.io.File(context.cacheDir, "teilen").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
+    state.notice = tr("Wird vorbereitet …")
+    val file = withContext(Dispatchers.IO) {
+        val suffix = (track.suffix ?: "mp3").lowercase().takeIf { it.matches(Regex("[a-z0-9]{2,5}")) } ?: "mp3"
+        fun fetch(url: String, out: java.io.File) = runCatching {
+            val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            c.connectTimeout = 15_000; c.readTimeout = 180_000
+            try {
+                if (c.responseCode !in 200..299) throw java.io.IOException("HTTP ${c.responseCode}")
+                c.inputStream.use { input -> out.outputStream().use { input.copyTo(it) } }
+            } finally { c.disconnect() }
+            out.takeIf { it.length() > 0 }
+        }.onFailure { android.util.Log.w("LiDio", "Teilen als Datei: $url", it) }.getOrNull()
+        val account = state.account
+        val local = WebDownloads.fileFor(track)
+            ?: track.path?.takeIf { server.kind == ServerKind.Local || it.startsWith("/") }?.let { java.io.File(it) }?.takeIf { it.isFile }
+        val picked = track.path?.takeIf { server.kind == ServerKind.Local && it.startsWith("content:") }?.let { path ->
+            runCatching { java.io.File(dir, "$name.$suffix").also { out ->
+                context.contentResolver.openInputStream(android.net.Uri.parse(path))!!.use { i -> out.outputStream().use { i.copyTo(it) } } } }.getOrNull() }
+        local?.let { java.io.File(dir, "$name.${it.extension}").also { out -> it.copyTo(out, overwrite = true) } }
+            ?: picked
+            ?: account?.let { Offline.stored(context, it.id, track) }?.let { (key, uri) ->
+                java.io.File(dir, "$name.$suffix").takeIf { Offline.copyOut(context, key, uri, it) } }
+            ?: server.mp3Url(track)?.let { fetch(it, java.io.File(dir, "$name.mp3")) }
+            ?: server.streamUrl(track, 0).takeIf { it.startsWith("http") }?.let { fetch(it, java.io.File(dir, "$name.$suffix")) }
+    }
+    if (file == null || file.length() == 0L) { state.notice = tr("Die Datei ließ sich nicht holen."); return }
+    state.notice = null
+    val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".teilen", file)
+    val send = Intent(Intent.ACTION_SEND).setType(if (file.extension == "mp3") "audio/mpeg" else "audio/*")
+        .putExtra(Intent.EXTRA_STREAM, uri).putExtra(Intent.EXTRA_SUBJECT, file.nameWithoutExtension)
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    context.startActivity(Intent.createChooser(send, tr("Lied teilen")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+/** Sharing outlives the menu it starts from (the menu closes at once; preparing a file takes a few seconds). */
+private val shareScope = kotlinx.coroutines.MainScope()
+
+/** Teilen: as a link to LiDio, or as the song file – like a small iOS sheet. */
+@Composable
+fun ShareChoice(state: AppState, server: MusicServer, track: Track, onClose: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = shareScope
+    MenuSheet(tr("Teilen"), "${track.artist} – ${track.title}", onClose) {
+        MenuRow(tr("Link teilen"), Symbol.Share) { onClose(); scope.launch { shareTrack(context, state, server, track) } }
+        MenuRow(tr("Als Datei teilen"), Symbol.Downloaded) { onClose(); scope.launch { shareFile(context, state, server, track) } }
+    }
+}
+
 /** The context menu of a title (long press), like iOS: play next, play last, share, remove the download. */
 @Composable
 fun TrackMenu(state: AppState, server: MusicServer, track: Track, onClose: () -> Unit) {
@@ -57,7 +112,9 @@ fun TrackMenu(state: AppState, server: MusicServer, track: Track, onClose: () ->
             ListRow(if (fav) tr("Aus Favoriten entfernen") else "Favorit", onClick = { state.playback.toggleFavorite(track, server); onClose() },
                 trailing = { SymbolIcon(Symbol.Star, ink.label, 20.dp, filled = fav) })
             val stored = state.account?.let { Offline.stored(context, it.id, track) }
-            ListRow(tr("Teilen …"), separator = stored != null, onClick = { onClose(); scope.launch { shareTrack(context, state, server, track) } },
+            var sharing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+            if (sharing) ShareChoice(state, server, track) { sharing = false; onClose() }
+            ListRow(tr("Teilen …"), separator = stored != null, onClick = { sharing = true },
                 trailing = { SymbolIcon(Symbol.Share, ink.label, 20.dp) })
             // Like iOS: "Download entfernen" in red, only when the title is on the phone.
             if (stored != null) ListRow(tr("Download entfernen"), separator = false, titleColor = Red, onClick = { Offline.remove(context, listOf(stored.first)); onClose() },

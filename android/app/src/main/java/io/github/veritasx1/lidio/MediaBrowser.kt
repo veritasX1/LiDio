@@ -39,6 +39,23 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
         return artist to albums
     }
 
+    /** The artist's page: the text about them (the server's own, e.g. from its metadata), the most played titles, the
+     *  albums with their title count (singles & EPs apart), similar artists from the own library and the backdrop. */
+    override fun artistPage(id: String): ArtistInfo {
+        val item = get("/Users/$userId/Items/$id", "Fields" to "Overview,BackdropImageTags")
+        val artist = artist(item)
+        val albums = items("IncludeItemTypes" to "MusicAlbum", "Fields" to "$ALBUM_FIELDS,ChildCount", "AlbumArtistIds" to id,
+            "SortBy" to "ProductionYear,SortName", "SortOrder" to "Descending").map(::album)
+        val top = runCatching { items("IncludeItemTypes" to "Audio", "ArtistIds" to id, "SortBy" to "PlayCount,SortName",
+            "SortOrder" to "Descending", "Limit" to 20).map(::track) }.getOrDefault(emptyList())
+        val similar = runCatching { get("/Artists/$id/Similar", "UserId" to userId, "Limit" to 12).arr("Items").objects().map(::artist) }.getOrDefault(emptyList())
+        val backdrop = if ((item.arr("BackdropImageTags")?.length() ?: 0) > 0)
+            "$base/Items/$id/Images/Backdrop/0?maxWidth=1200&quality=90&$keyParam=${Http.encode(token)}" else null
+        val (singles, full) = albums.partition { it.trackCount in 1..3 }
+        return ArtistInfo(artist, top, full, singles, about = plainText(item.str("Overview")), similar = similar,
+            picture = artist.coverId?.let { coverUrl(it, 1200) } ?: backdrop)
+    }
+
     override fun albums(order: AlbumOrder, size: Int, offset: Int): List<Album> {
         val (sort, direction) = when (order) {
             AlbumOrder.Newest -> "DateCreated" to "Descending"
@@ -65,8 +82,8 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
      *  12.6 s, without it 50 ms. Apple's list shows only cover and name anyway; the count is on the playlist's own page. */
     override fun playlists(): List<Playlist> {
         val folder = runCatching { get("/Users/$userId/Views").arr("Items").objects().firstOrNull { it.str("CollectionType") == "playlists" }?.id() }.getOrNull()
-        val items = if (folder != null) get("/Users/$userId/Items", "ParentId" to folder, "SortBy" to "SortName", "Fields" to "MediaType")
-            else get("/Users/$userId/Items", "Recursive" to true, "IncludeItemTypes" to "Playlist", "SortBy" to "SortName", "Fields" to "MediaType")
+        val items = if (folder != null) get("/Users/$userId/Items", "ParentId" to folder, "SortBy" to "SortName", "Fields" to "MediaType,Tags")
+            else get("/Users/$userId/Items", "Recursive" to true, "IncludeItemTypes" to "Playlist", "SortBy" to "SortName", "Fields" to "MediaType,Tags")
         return items.arr("Items").objects().filter { it.str("MediaType") != "Video" && (it.str("Type") ?: "Playlist") == "Playlist" }.map(::playlist)
     }
 
@@ -92,6 +109,13 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
         return "$base/Audio/${track.id}/universal?" + params.joinToString("&") { (k, v) -> "$k=${Http.encode(v.toString())}" }
     }
 
+    /** As an MP3 to pass on: an MP3 original as it is (at once), anything else converted by the server (320 kbit/s, with tags). */
+    override fun mp3Url(track: Track): String {
+        val params = listOf(keyParam to token, "UserId" to userId, "DeviceId" to deviceId) +
+            if (track.suffix.equals("mp3", ignoreCase = true)) listOf("Static" to "true") else listOf("AudioCodec" to "mp3", "AudioBitRate" to "320000", "Static" to "false")
+        return "$base/Audio/${track.id}/stream.mp3?" + params.joinToString("&") { (k, v) -> "$k=${Http.encode(v)}" }
+    }
+
     /** "id#tag": the picture's tag makes a new address when the picture changes (e.g. a Deezer cover set on the server), so the
      *  phone's cover store loads it again instead of showing the old one forever. */
     override fun coverUrl(coverId: String, size: Int): String {
@@ -107,9 +131,11 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
     override fun createPlaylist(name: String, tracks: List<Track>): Playlist {
         val chunks = tracks.map { it.id }.chunked(100)
         val first = chunks.firstOrNull().orEmpty()
-        val query = listOf(tr("Name") to name, "Ids" to first.joinToString(","), "UserId" to userId, "MediaType" to "Audio")
-            .joinToString("&") { (k, v) -> "$k=${Http.encode(v)}" }
-        val body = JSONObject().put("Name", name).put("Ids", org.json.JSONArray(first)).put("UserId", userId).put("MediaType", "Audio").toString()
+        // An empty "Ids=" makes Emby fail ("Unrecognized Guid format") – a new, empty Mixtape leaves it out.
+        val query = listOf("Name" to name, "Ids" to first.joinToString(","), "UserId" to userId, "MediaType" to "Audio")
+            .filter { it.first != "Ids" || it.second.isNotEmpty() }.joinToString("&") { (k, v) -> "$k=${Http.encode(v)}" }
+        val body = JSONObject().put("Name", name).apply { if (first.isNotEmpty()) put("Ids", org.json.JSONArray(first)) }
+            .put("UserId", userId).put("MediaType", "Audio").toString()
         val id = JSONObject(Http.post("$base/Playlists?$query", body, headers)).str("Id") ?: throw ServerError(tr("Die Playlist wurde nicht angelegt."))
         chunks.drop(1).forEach { chunk -> Http.post("$base/Playlists/$id/Items?Ids=${chunk.joinToString(",")}&UserId=$userId", "{}", headers) }
         return Playlist(id, name, tracks.size, tracks.sumOf { it.duration })
@@ -144,14 +170,14 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
 
     override fun played(track: Track) { runCatching { Http.post("$base/Users/$userId/PlayedItems/${track.id}", "{}", headers) } }
 
-    private fun artist(j: JSONObject) = Artist(j.id(), j.str(tr("Name")) ?: tr("Unbekannt"), (j.int("ChildCount") ?: 0),
+    private fun artist(j: JSONObject) = Artist(j.id(), j.str("Name") ?: tr("Unbekannt"), (j.int("ChildCount") ?: 0),
         if (j.obj("ImageTags")?.has("Primary") == true) j.id() else null)
 
     private fun album(j: JSONObject): Album {
         val artist = j.arr("AlbumArtists").objects().firstOrNull()
-        return Album(j.id(), j.str(tr("Name")) ?: tr("Unbekanntes Album"), j.str("AlbumArtist") ?: artist?.str(tr("Name")) ?: tr("Unbekannt"),
+        return Album(j.id(), j.str("Name") ?: tr("Unbekanntes Album"), j.str("AlbumArtist") ?: artist?.str("Name") ?: tr("Unbekannt"),
             artist?.str("Id"), j.int("ProductionYear"), if (j.obj("ImageTags")?.has("Primary") == true) j.id() else null,
-            (j.int("ChildCount") ?: 0), ticks(j), j.arr(tr("Genres"))?.optString(0)?.takeIf { it.isNotEmpty() },
+            (j.int("ChildCount") ?: 0), ticks(j), j.arr("Genres")?.optString(0)?.takeIf { it.isNotEmpty() },
             (j.str("AlbumArtist") ?: "").equals("Various Artists", true) || (j.str("AlbumArtist") ?: "").equals("Verschiedene Interpreten", true))
     }
 
@@ -163,8 +189,8 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
             else -> null
         }
         val source = j.arr("MediaSources").objects().firstOrNull()
-        return Track(j.id(), j.str(tr("Name")) ?: tr("Unbekannt"), artists.joinToString(", ").ifEmpty { j.str("AlbumArtist") ?: tr("Unbekannt") },
-            j.str(tr("Album")) ?: "", j.str("AlbumId"), ticks(j), j.int("IndexNumber"), j.int("ParentIndexNumber"), j.int("ProductionYear"),
+        return Track(j.id(), j.str("Name") ?: tr("Unbekannt"), artists.joinToString(", ").ifEmpty { j.str("AlbumArtist") ?: tr("Unbekannt") },
+            j.str("Album") ?: "", j.str("AlbumId"), ticks(j), j.int("IndexNumber"), j.int("ParentIndexNumber"), j.int("ProductionYear"),
             cover, j.str("Path"), source?.long("Size") ?: 0, j.str("Container"),
             favorite = j.obj("UserData")?.optBoolean("IsFavorite"))
     }
@@ -181,16 +207,17 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
         get("/Items/${track.id}/InstantMix", "UserId" to userId, "Limit" to count, "Fields" to FIELDS).arr("Items").objects().map(::track)
             .filter { it.id != track.id }
 
-    private fun playlist(j: JSONObject) = Playlist(j.id(), j.str(tr("Name")) ?: "Playlist", (j.int("ChildCount") ?: 0), ticks(j),
+    private fun playlist(j: JSONObject) = Playlist(j.id(), j.str("Name") ?: "Playlist", (j.int("ChildCount") ?: 0), ticks(j),
         j.obj("ImageTags")?.str("Primary")?.let { tag -> "${j.id()}#$tag" }, MissingNote.read(j.str("Overview")),
-        MissingNote.origin(j.str("Overview")))
+        MissingNote.origin(j.str("Overview")),
+        mixtape = MIXTAPE in tagsOf(j), ownCover = OWN_COVER in tagsOf(j))
 
     override fun discover(count: Int): List<Track> =
         items("IncludeItemTypes" to "Audio", "Filters" to "IsUnplayed", "SortBy" to "Random", "Limit" to count).map(::track)
 
     /** Emby lists the genres most used first – the first 24. */
     override fun genres(): List<Genre> =
-        get("/MusicGenres", "UserId" to userId, "Recursive" to true, "Limit" to 24).arr("Items").objects().map { Genre(it.id(), it.str(tr("Name")) ?: "") }
+        get("/MusicGenres", "UserId" to userId, "Recursive" to true, "Limit" to 24).arr("Items").objects().map { Genre(it.id(), it.str("Name") ?: "") }
 
     override fun genreAlbums(genre: Genre): List<Album> =
         items("IncludeItemTypes" to "MusicAlbum", "Fields" to ALBUM_FIELDS, "GenreIds" to genre.id, "SortBy" to "DateCreated", "SortOrder" to "Descending", "Limit" to 200).map(::album)
@@ -205,7 +232,7 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
             val all = get("/Users/ItemAccess", "ItemId" to playlistId).arr("Items").objects()
             val me = all.firstOrNull { it.id() == userId }?.optString("UserItemShareLevel") ?: "None"
             val users = all.filter { it.id() != userId }.map { u ->
-                ShareUser(u.id(), u.str(tr("Name")) ?: "?", when (u.optString("UserItemShareLevel")) { "Read" -> "read"; "None", "" -> "none"; else -> "write" })
+                ShareUser(u.id(), u.str("Name") ?: "?", when (u.optString("UserItemShareLevel")) { "Read" -> "read"; "None", "" -> "none"; else -> "write" })
             }
             Sharing(users, everyone = users.isNotEmpty() && users.all { it.level != "none" }, perUser = true, canManage = me.startsWith("Manage"))
         } else {
@@ -213,7 +240,7 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
             val shares = p.arr("Shares").objects().associate { it.str("UserId").orEmpty() to (if (it.optBoolean("CanEdit")) "write" else "read") }
             val people = runCatching { JSONObject("{\"Items\":" + Http.get("$base/Users", headers) + "}").arr("Items").objects() }.getOrNull()
                 ?: JSONObject("{\"Items\":" + Http.get("$base/Users/Public", headers) + "}").arr("Items").objects()
-            Sharing(people.filter { it.id() != userId }.map { ShareUser(it.id(), it.str(tr("Name")) ?: "?", shares[it.id()] ?: "none") },
+            Sharing(people.filter { it.id() != userId }.map { ShareUser(it.id(), it.str("Name") ?: "?", shares[it.id()] ?: "none") },
                 everyone = p.optBoolean("OpenAccess"), perUser = true)
         }
     }.getOrNull()
@@ -235,11 +262,40 @@ class MediaBrowserServer(override val kind: ServerKind, address: String, private
     }.isSuccess
 
     /** Emby and Jellyfin take the picture base64-encoded. */
-    override fun setPlaylistCover(playlistId: String, jpeg: ByteArray): Boolean = runCatching {
+    override fun setPlaylistCover(playlistId: String, jpeg: ByteArray, own: Boolean): Boolean = runCatching {
+        val marked = OWN_COVER in tagsOf(get("/Users/$userId/Items/$playlistId"))
+        if (!own && marked) return@runCatching false
         Http.send("POST", "$base/Items/$playlistId/Images/Primary", android.util.Base64.encodeToString(jpeg, android.util.Base64.NO_WRAP), "image/jpeg", headers)
-    }.isSuccess
+        if (own && !marked) addTag(playlistId, OWN_COVER)
+        true
+    }.getOrDefault(false)
 
-    /** The item as the server has it, the description changed, the field locked so a library scan keeps it. */
+    private val OWN_COVER = "LiDio: eigenes Cover"
+    private val MIXTAPE = "LiDio: Mixtape"
+
+    override fun markMixtape(playlistId: String, on: Boolean): Boolean = runCatching { if (on) addTag(playlistId, MIXTAPE) else removeTag(playlistId, MIXTAPE); true }.getOrDefault(false)
+
+    /** Tags: Emby keeps them as "TagItems" ({Name}), Jellyfin as "Tags" (strings). */
+    private fun tagsOf(j: JSONObject): Set<String> =
+        ((j.optJSONArray("TagItems")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("Name") } } ?: emptyList()) +
+            (j.optJSONArray("Tags")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList())).toSet()
+
+    private fun removeTag(itemId: String, tag: String) {
+        val item = get("/Users/$userId/Items/$itemId")
+        if (tag !in tagsOf(item)) return
+        item.optJSONArray("TagItems")?.let { a -> item.put("TagItems", org.json.JSONArray((0 until a.length()).map { a.getJSONObject(it) }.filter { it.optString("Name") != tag })) }
+        item.optJSONArray("Tags")?.let { a -> item.put("Tags", org.json.JSONArray((0 until a.length()).map { a.optString(it) }.filter { it != tag })) }
+        Http.send("POST", "$base/Items/$itemId", item.toString(), "application/json", headers)
+    }
+
+    private fun addTag(itemId: String, tag: String) {
+        val item = get("/Users/$userId/Items/$itemId")
+        if (tag in tagsOf(item)) return
+        if (kind == ServerKind.Emby) item.put("TagItems", (item.optJSONArray("TagItems") ?: org.json.JSONArray()).put(JSONObject().put("Name", tag)))
+        else item.put("Tags", (item.optJSONArray("Tags") ?: org.json.JSONArray()).put(tag))
+        Http.send("POST", "$base/Items/$itemId", item.toString(), "application/json", headers)
+    }
+
     override fun noteMissing(playlistId: String, missing: List<String>): Boolean = runCatching {
         val item = get("/Users/$userId/Items/$playlistId")
         item.put("Overview", MissingNote.write(item.str("Overview"), missing))

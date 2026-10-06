@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SourceMark(source: Source) {
     val ink = Ink
-    val colour = when (source) { Source.Server -> ink.tint; Source.Deezer -> Color(0xFFA238FF); Source.Spotify -> Color(0xFF1DB954) }
+    val colour = when (source) { Source.Server -> ink.tint; Source.Deezer -> Color(0xFFA238FF); Source.Spotify -> Color(0xFF1DB954); Source.Mixtape -> Color(0xFFFF9F0A) }
     Box(Modifier.clip(RoundedCornerShape(5.dp)).border(1.dp, colour, RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 1.dp)
         .semantics { contentDescription = tr("Quelle: {label}", "label" to source.label) }) { Label(source.label, 11f, 700, colour) }
 }
@@ -107,7 +107,7 @@ fun RemoteScreen(state: AppState, server: MusicServer, route: Route.RemotePage) 
         // The transfer is a small symbol now, like ↓ on an album: the server with an arrow (Olaf 05.10.2026).
         NavBar(state, trailing = load.value?.second?.let { wanted -> {
             Box(Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape)
-                .clickable(role = Role.Button, onClickLabel = tr("Auf den Server übertragen")) { state.open(Route.ImportWith(list.name, wanted, list.cover)) }
+                .clickable(role = Role.Button, onClickLabel = tr("Auf den Server übertragen")) { state.open(Route.ImportWith(list.name, wanted, list.cover, mixtape = list.source == Source.Mixtape)) }
                 .semantics { contentDescription = tr("Auf den Server übertragen") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.ServerDown, ink.tint, 24.dp) }
         } })
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {

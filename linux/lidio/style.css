@@ -94,11 +94,23 @@ window.modern .side-panel { margin: 8px 0 8px 8px; border-radius: 18px; backgrou
   border: 1px solid alpha(@window_fg_color, 0.07); box-shadow: 0 6px 24px alpha(black, 0.08); }
 window.modern .side-panel .navigation-sidebar { background: transparent; }
 window.modern .sidebar-pane, window.modern .sidebar-pane > * { background: transparent; }
+/* Card 694ae781 ("Designbruch bei der Menügestaltung"): the floating sidebar had the split view's straight edge line beside
+   it – a round panel and a hard line at once. The panel alone marks the edge. */
+window.modern overlay-split-view > .sidebar-pane { border: none; box-shadow: none; }
 window.modern .transport button { min-height: 30px; }
 window.modern headerbar { background: transparent; box-shadow: none; border-bottom: none; }
-window.modern .transport { background: alpha(@window_fg_color, 0.06); border-radius: 999px; padding: 1px 6px; margin: 6px 0;
-  border: 1px solid alpha(@window_fg_color, 0.06); }
-window.modern .lcd { border-radius: 16px; background: alpha(@window_fg_color, 0.05); border: 1px solid alpha(@window_fg_color, 0.07); }
+/* Card 694ae781 (Olaf: "Apples Steuerung … hat keine Umrandung"; "ein abgerundetes Rechteck in einer Pille"): the transport
+   buttons are bare symbols like in Music on the Mac – no capsule around them, no box when hovered or switched on; an active
+   shuffle/repeat shows in the accent colour, hovering only brightens the symbol. */
+window.modern .transport { background: none; border: none; padding: 0; margin: 6px 0; }
+.transport button, .transport button:hover, .transport button:active, .transport button:checked {
+  background: none; box-shadow: none; outline: none; }
+.transport button { opacity: 0.72; transition: opacity 120ms; }
+.transport button:hover { opacity: 1; }
+.transport button:checked { color: @accent_color; opacity: 1; }
+/* Card b944e261: the cover sits inside the display with an even margin and its own rounding, centred – before it touched the
+   display's round corner and looked shifted. */
+window.modern .lcd { border-radius: 12px; background: alpha(@window_fg_color, 0.05); border: none; padding: 5px; }
 window.modern .red-button { border-radius: 999px; padding: 7px 24px; }
 window.modern .tracklist row { border-radius: 10px; }
 window.modern .mix-tile, window.modern .genre-tile { border-radius: 16px; }
@@ -122,3 +134,17 @@ window.mini.hover .mini-top { opacity: 1; }
 .mini-round { background: alpha(black, 0.45); color: white; min-width: 28px; min-height: 28px; }
 .milk-name { color: white; font-weight: 700; text-shadow: 0 1px 3px black; transition: opacity 600ms; }
 .video { background: black; }
+
+/* Card bb728258: Music on macOS 26 – the player floats as a glass capsule over the content; the "Neu" page's cards and grid */
+window .player-capsule { padding: 6px 10px 6px 14px; border-radius: 999px; 
+  border: 1px solid alpha(@window_fg_color, 0.08); box-shadow: 0 10px 34px alpha(black, 0.18), 0 1px 3px alpha(black, 0.08); }
+.player-capsule.light { background-color: rgb(252, 252, 253); }
+.player-capsule.dark { background-color: rgb(44, 44, 46); border-color: rgba(255, 255, 255, 0.10); }
+window.modern .player-capsule .lcd { background: none; border: none; min-height: 44px; padding: 0; }
+.player-capsule .transport { margin: 0; }
+.eyebrow { font-size: 11px; font-weight: 700; opacity: 0.55; letter-spacing: 0.04em; }
+.hero-title { font-size: 15px; font-weight: 600; }
+.grid-song { padding: 4px 0; border-bottom: 1px solid alpha(@window_fg_color, 0.06); }
+
+/* Card eea4ee65: "Musik hinzufügen" in the accent colour, like Music's row. */
+button.add-music { color: @accent_color; font-weight: 600; }

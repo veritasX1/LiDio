@@ -149,6 +149,14 @@ fun OfflineSettings(state: AppState) {
     var limit by remember { mutableIntStateOf(settings.keepLimitMb) }
     var usage by remember { mutableStateOf(0L to 0L) }
     LaunchedEffect(Unit) { while (true) { usage = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Offline.usage(context) }; delay(2000) } }
+    // Card 208e755b: Autoplay ∞ left the player (one order button there) – a setting one makes once.
+    var autoplay by remember { mutableStateOf(state.playback.autoplay) }
+    Label(tr("WIEDERGABE"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, bottom = 6.dp))
+    Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
+        ListRow(tr("Autoplay"), tr("Am Ende der Warteschlange geht es mit ähnlicher Musik weiter"), height = 60.dp, separator = false,
+            trailing = { IosSwitch(autoplay, tr("Autoplay")) { autoplay = it; if (it != state.playback.autoplay) state.playback.toggleAutoplay() } })
+    }
+    Spacer(Modifier.height(24.dp))
     Label(tr("OFFLINE"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, bottom = 6.dp))
     Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
         ListRow(tr("Gehörtes behalten"), tr("Was du hörst, wird im Hintergrund ganz geladen"), height = 60.dp,
@@ -157,12 +165,21 @@ fun OfflineSettings(state: AppState) {
             Label("Höchstens", 15f, modifier = Modifier.padding(top = 4.dp, bottom = 6.dp))
             Segmented(Settings.LIMITS.map(Settings::size), Settings.LIMITS.indexOf(limit).coerceAtLeast(0)) { limit = Settings.LIMITS[it]; settings.keepLimitMb = limit }
         }
+        val account = state.account?.id ?: ""
+        var days by remember(account) { mutableIntStateOf(Keep.days(context, account)) }
+        Column(Modifier.padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 10.dp)) {
+            Label(tr("Auf dem Handy behalten"), 17f, modifier = Modifier.padding(bottom = 6.dp))
+            Segmented(Keep.DAYS.map(Keep::label), Keep.DAYS.indexOf(days).coerceAtLeast(0)) { days = Keep.DAYS[it]; Keep.setDays(context, account, days) }
+            Label(if (days == 0) tr("Geladenes und Gehörtes bleibt auf dem Handy.")
+                else tr("Was du so lange nicht gehört hast, liegt danach nur noch auf dem Server. Lieblingstitel bleiben, solange sie Lieblingstitel sind."),
+                13f, color = ink.secondary, lines = 3, modifier = Modifier.padding(top = 6.dp))
+        }
         ListRow(tr("Nur über WLAN laden"), height = 48.dp, trailing = { IosSwitch(wifi, tr("Nur über WLAN laden")) {
             wifi = it; settings.wifiOnly = it; Offline.manager(context).requirements = Offline.requirements(context) } })
         ListRow("Belegt", tr("Geladen {mb} · Gehört {mb2}", "mb" to (mb(usage.first)), "mb2" to (mb(usage.second))), height = 60.dp, separator = true)
         ListRow(tr("Gehörtes löschen"), onClick = { Offline.clearHeard(context) }, titleColor = Color(0xFFFF3B30), separator = false)
     }
-    Label(tr("Eine neue Höchstgrenze gilt ab dem nächsten Start von LiDio. Geladenes bleibt, bis du es entfernst."), 13f, color = ink.secondary,
+    Label(tr("Eine neue Höchstgrenze gilt ab dem nächsten Start von LiDio. Aufgeräumt wird einmal am Tag beim Start."), 13f, color = ink.secondary,
         lines = 3, modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 6.dp, bottom = 20.dp))
 }
 

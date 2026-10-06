@@ -104,6 +104,10 @@ class ImportMixin:
         server = self.server
 
         def load():
+            if rl.source == "Mixtape":
+                # A received Mixtape: its titles travel in the link (card c9b15c67).
+                from .share import SharedList
+                return rl, [I.Wanted(t, a) for a, t in SharedList.unpack(rl.id)]
             src = next((s for s in self.remote_sources() if s.source == rl.source), None)
             meta = rl
             if rl.source == "Deezer":
@@ -148,7 +152,8 @@ class ImportMixin:
             row.append(Gtk.Box(hexpand=True))
             send = Gtk.Button(icon_name="network-server-symbolic", css_classes=["flat", "circular", "download-button"], valign=Gtk.Align.CENTER,
                               tooltip_text=_("Als Playlist auf deinen Server übertragen"))
-            send.connect("clicked", lambda *_: self.push(self.import_page(wanted, meta.name, meta.cover, meta.link)))
+            send.connect("clicked", lambda *_: self.push(self.import_page(wanted, meta.name, meta.cover, None if meta.source == "Mixtape" else meta.link,
+                                                                                  mixtape=meta.source == "Mixtape")))
             row.append(send)
             info.append(row); info.append(status)
             head.append(info); box.append(head)
@@ -202,7 +207,7 @@ class ImportMixin:
             self.push(self.import_page(wanted, name.rsplit(".", 1)[0]))
         d.open(self, None, done)
 
-    def import_page(self, wanted, name="", cover=None, origin=None):
+    def import_page(self, wanted, name="", cover=None, origin=None, mixtape=False):
         """Compare with the server → found (green), unsure (orange – choose), missing (red); then one playlist of what is there,
         the missing ones written into its description (readable in every app)."""
         from .window import run
@@ -279,6 +284,8 @@ class ImportMixin:
 
             def work():
                 made = server.create_playlist(title, tracks)
+                if mixtape and hasattr(server, "mark_mixtape"):
+                    server.mark_mixtape(made.id)      # a received Mixtape stays one (card c9b15c67)
                 if missing or cover or origin:
                     # Emby: only once it has all titles, or it writes the playlist back empty.
                     if server.wait_filled(made.id, len(tracks)):

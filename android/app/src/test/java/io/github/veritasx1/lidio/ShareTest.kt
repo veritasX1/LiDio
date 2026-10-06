@@ -24,7 +24,7 @@ class ShareTest {
     fun linkRoundTrip() {
         val shared = Shared("ae0c2c1c", "t42", "Weißes Rauschen & mehr", "Anna Analog", "Rauschen #1")
         val link = shared.link()
-        assertTrue(link.startsWith("https://lisoft.goip.de/lidio/t#"))
+        assertTrue(link.startsWith("https://lisoftware.de/lidio/t#"))
         assertEquals(shared, Shared.parse(Uri.parse(link)))
         assertTrue("Text: $link", shared.text().contains("„Weißes Rauschen & mehr“ von Anna Analog"))
         // The details are in the fragment: a browser never sends them to the web server.

@@ -198,6 +198,187 @@ class MoreMixin:
                         self.sidebar.select_row(row); break
         run(self.server.playlists, done, self.toast)
 
+    def mixtapes_page(self):
+        """Card c9b15c67: the playlists led as Mixtapes – shared or just for oneself; "+" makes a new one."""
+        from .window import run
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        top = Gtk.Box(margin_start=28, margin_end=28, margin_top=20, margin_bottom=8)
+        top.append(_label(_("Mixtapes"), "large-title")); top.append(Gtk.Box(hexpand=True))
+        new = Gtk.Button(icon_name="list-add-symbolic", css_classes=["flat", "circular"], valign=Gtk.Align.CENTER, tooltip_text=_("Neues Mixtape"))
+        new.connect("clicked", lambda *_a: self._ask_name(_("Neues Mixtape"), "", _("Anlegen"), lambda n: run(
+            lambda: (lambda made: (self.server.mark_mixtape(made.id), made)[1])(self.server.create_playlist(n, [])),
+            lambda made: (self.toast(_("Mixtape „{name}“ angelegt – Titel per Rechtsklick → Zur Playlist hinzufügen.", name=n)),
+                          self.reload_playlists(select=made.id), self.show_page("mixtapes")), self.toast)))
+        top.append(new)
+        box.append(top)
+        lst = Gtk.ListBox(css_classes=["tracklist"], selection_mode=Gtk.SelectionMode.NONE, margin_start=28, margin_end=28)
+        box.append(lst)
+        mixtapes = [p for p in self._playlists if getattr(p, "mixtape", False)]
+        if not mixtapes:
+            box.append(Gtk.Label(label=_("Noch keine Mixtapes. „+“ legt eins an, oder eine Playlist über ••• → „Als Mixtape führen“."),
+                                 wrap=True, xalign=0, css_classes=["dim"], margin_start=28, margin_top=8))
+        for p in mixtapes:
+            row = Gtk.ListBoxRow(); row.p = p
+            h = Gtk.Box(spacing=12, margin_top=6, margin_bottom=6)
+            c = Cover(48, 6); c.show("mixtape:" + p.name if not getattr(p, "own_cover", False) else self.server.cover_url(p.cover_id, 120) if p.cover_id else None); h.append(c)
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.CENTER, hexpand=True)
+            col.append(_label(p.name, "title"))
+            sub = Gtk.Box(spacing=4)
+            sub.append(Gtk.Image.new_from_icon_name("lidio-cassette-symbolic")); sub.append(_label(_("Mixtape"), "dim caption"))
+            col.append(sub); h.append(col)
+            row.set_child(h); lst.append(row)
+        lst.set_activate_on_single_click(True)
+        lst.connect("row-activated", lambda l, r: self.push(self.playlist_page(r.p.id, r.p.name)))
+        return self._page(_("Mixtapes"), self._scroll(box))
+
+    def add_music_dialog(self, p):
+        """Card eea4ee65 (desktop too – Olaf: „am Desktop sehe ich nicht, wie ich Musik dem Mixtape hinzufüge“): search the own
+        library, without a word the favourites and what came in lately; the button adds at once and turns into a tick."""
+        from .window import run, clock
+        dlg = Adw.Dialog(title=_("Musik hinzufügen"), content_width=560, content_height=640)
+        tv = Adw.ToolbarView(); tv.add_top_bar(Adw.HeaderBar())
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin_start=18, margin_end=18, margin_bottom=14)
+        col.append(_label(_("zu „{name}“", name=p.name), "dim"))
+        entry = Gtk.SearchEntry(placeholder_text=_("Interpreten, Alben, Titel")); col.append(entry)
+        lst = Gtk.ListBox(css_classes=["tracklist"], selection_mode=Gtk.SelectionMode.NONE)
+        sc = Gtk.ScrolledWindow(vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER); sc.set_child(lst); col.append(sc)
+        tv.set_content(col); dlg.set_child(tv)
+        icon = "lidio-cassette-add-symbolic" if getattr(p, "mixtape", False) else "list-add-symbolic"
+        added = set()
+        from .importing import without_duplicates
+
+        def fill(tracks):
+            while (r := lst.get_first_child()) is not None:
+                lst.remove(r)
+            for t in without_duplicates(tracks)[:80]:
+                h = Gtk.Box(spacing=10, margin_top=4, margin_bottom=4)
+                c = Cover(40, 4); c.show(self.server.cover_url(t.cover_id, 80) if t.cover_id else None); h.append(c)
+                info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, valign=Gtk.Align.CENTER)
+                info.append(_label(t.title, "title")); info.append(_label(t.artist, "dim caption")); h.append(info)
+                b = Gtk.Button(icon_name="object-select-symbolic" if t.id in added else icon, css_classes=["flat", "circular"],
+                               valign=Gtk.Align.CENTER, sensitive=t.id not in added, tooltip_text=_("Hinzufügen"))
+
+                def add(w, t=t):
+                    w.set_sensitive(False); added.add(t.id)
+                    run(lambda: self.server.add_to_playlist(p.id, [t]),
+                        lambda _r: w.set_icon_name("object-select-symbolic"),
+                        lambda m: (added.discard(t.id), w.set_sensitive(True), self.toast(_("„{title}“ ließ sich nicht hinzufügen.", title=t.title))))
+                b.connect("clicked", add); h.append(b)
+                lst.append(Gtk.ListBoxRow(child=h, activatable=False))
+
+        def start():
+            def work():
+                out = []
+                for f in (lambda: self.server.favorites(), lambda: self.server.tracks(40)):
+                    try:
+                        out += f()
+                    except Exception:      # noqa: BLE001
+                        pass
+                return out
+            run(work, fill, self.toast)
+        timer = {"id": None}
+
+        def changed(e):
+            if timer["id"]:
+                GLib.source_remove(timer["id"])
+            q = e.get_text().strip()
+            timer["id"] = GLib.timeout_add(300, lambda: (timer.update(id=None), run(lambda: self.server.search(q).tracks, fill, self.toast) if q else start(), False)[2])
+        entry.connect("search-changed", changed)
+        dlg.connect("closed", lambda *_a: self.push(self.playlist_page(p.id, p.name)) if added else None)
+        start()
+        dlg.present(self)
+
+    def share_mixtape(self, p, tracks):
+        """Card c9b15c67: the playlist as a link – copied, ready to paste into Signal & Co. Everyone on this server may add to it
+        (Olaf: „alle Nutzer sollen dem Mixtape beitragen können“), and it is led as a Mixtape."""
+        from .window import run
+        from .share import SharedList
+
+        def work():
+            try:
+                s = self.server.sharing(p.id)
+                if s:
+                    self.server.share(p.id, {u.id: "write" for u in s.users}, True)
+            except Exception:      # noqa: BLE001 – the link works without it
+                pass
+            if hasattr(self.server, "mark_mixtape"):
+                self.server.mark_mixtape(p.id)
+            return SharedList(self.app.share_id(self.account, self.server), p.id, p.name, [(t.artist, t.title) for t in tracks]).text()
+
+        run(work, lambda text: (self.get_clipboard().set(text), self.toast(_("Mixtape-Link kopiert – z. B. in Signal einfügen.")),
+                                self.reload_playlists(select=p.id)), self.toast)
+
+    def cover_dialog(self, p):
+        """Card 5d1ab4c8: an own cover from a picture – the photo always fills the square (never bars); drag moves it, the wheel
+        or two fingers zoom; "Übernehmen" cuts exactly that square at 1000 × 1000. It wins over every automatic picture."""
+        from .window import run
+        from gi.repository import GdkPixbuf
+        f = Gtk.FileFilter(); f.set_name(_("Bilder")); f.add_mime_type("image/*")
+        filters = Gio.ListStore.new(Gtk.FileFilter); filters.append(f)
+
+        def chosen(d, res):
+            try:
+                path = d.open_finish(res).get_path()
+                pix = GdkPixbuf.Pixbuf.new_from_file(path)
+                pix = pix.apply_embedded_orientation() or pix
+            except Exception:      # noqa: BLE001
+                return
+            side = 420
+            st = {"scale": max(side / pix.get_width(), side / pix.get_height()), "x": 0.0, "y": 0.0}
+            st["x"] = (side - pix.get_width() * st["scale"]) / 2; st["y"] = (side - pix.get_height() * st["scale"]) / 2
+
+            def clamp():
+                low = max(side / pix.get_width(), side / pix.get_height())
+                st["scale"] = min(max(st["scale"], low), low * 6)
+                w, h = pix.get_width() * st["scale"], pix.get_height() * st["scale"]
+                st["x"] = min(0, max(side - w, st["x"])); st["y"] = min(0, max(side - h, st["y"]))
+
+            area = Gtk.DrawingArea(content_width=side, content_height=side, halign=Gtk.Align.CENTER, css_classes=["crop-area"])
+
+            def draw(a, cr, w, h):
+                cr.save(); cr.translate(st["x"], st["y"]); cr.scale(st["scale"], st["scale"])
+                Gdk.cairo_set_source_pixbuf(cr, pix, 0, 0); cr.paint(); cr.restore()
+            area.set_draw_func(draw)
+            drag = Gtk.GestureDrag(); start = {}
+            drag.connect("drag-begin", lambda g, x, y: start.update(x=st["x"], y=st["y"]))
+            drag.connect("drag-update", lambda g, dx, dy: (st.update(x=start["x"] + dx, y=start["y"] + dy), clamp(), area.queue_draw()))
+            area.add_controller(drag)
+
+            def zoom_at(factor, cx, cy):
+                old = st["scale"]; st["scale"] *= factor; clamp()
+                k = st["scale"] / old
+                st["x"] = cx - (cx - st["x"]) * k; st["y"] = cy - (cy - st["y"]) * k; clamp(); area.queue_draw()
+            scroll = Gtk.EventControllerScroll(flags=Gtk.EventControllerScrollFlags.VERTICAL)
+            scroll.connect("scroll", lambda c, dx, dy: (zoom_at(0.9 if dy > 0 else 1.1, side / 2, side / 2), True)[1])
+            area.add_controller(scroll)
+            pinch = Gtk.GestureZoom(); last = {"s": 1.0}
+            pinch.connect("begin", lambda *_a: last.update(s=1.0))
+            pinch.connect("scale-changed", lambda g, sc: (zoom_at(sc / last["s"], side / 2, side / 2), last.update(s=sc)))
+            area.add_controller(pinch)
+
+            dlg = Adw.Dialog(title=_("Cover"), content_width=500)
+            tv = Adw.ToolbarView(); tv.add_top_bar(Adw.HeaderBar())
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=8, margin_bottom=20, margin_start=24, margin_end=24)
+            col.append(_label(p.name, "title"))
+            col.append(Gtk.Label(label=_("Ziehen verschiebt, Mausrad oder zwei Finger zoomen – das Quadrat wird das Cover."), wrap=True, css_classes=["dim"]))
+            col.append(area)
+            ok = Gtk.Button(label=_("Übernehmen"), css_classes=["suggested-action", "pill"], halign=Gtk.Align.CENTER)
+            col.append(ok)
+            tv.set_content(col); dlg.set_child(tv)
+
+            def apply(*_a):
+                ok.set_sensitive(False)
+                left, top = -st["x"] / st["scale"], -st["y"] / st["scale"]
+                size = side / st["scale"]
+                sub = pix.new_subpixbuf(int(left), int(top), int(min(size, pix.get_width() - left)), int(min(size, pix.get_height() - top)))
+                jpeg = sub.scale_simple(1000, 1000, GdkPixbuf.InterpType.HYPER).save_to_bufferv("jpeg", ["quality"], ["90"])[1]
+                run(lambda: self.server.set_playlist_cover(p.id, jpeg, own=True),
+                    lambda _r: (dlg.close(), self.toast(_("Cover von „{name}“ gesetzt.", name=p.name)), self.reload_playlists(select=p.id)),
+                    lambda m: (ok.set_sensitive(True), self.toast(m)))
+            ok.connect("clicked", apply)
+            dlg.present(self)
+        Gtk.FileDialog(title=_("Cover aus Bild"), filters=filters).open(self, None, chosen)
+
     def playlist_menu(self, p, tracks):
         """The ••• of a playlist: rename, share, delete."""
         from .window import run
@@ -214,6 +395,13 @@ class MoreMixin:
                                                     lambda n: run(lambda: self.server.rename_playlist(p.id, n),
                                                                   lambda _: (self.reload_playlists(select=p.id), self.toast("Umbenannt")), self.toast)))
         item(_("Freigeben …"), lambda: self.share_dialog(p))
+        if hasattr(self.server, "mark_mixtape"):
+            # Card c9b15c67 / 5d1ab4c8: Mixtapes and an own cover.
+            item(_("Als Mixtape teilen (Link kopieren)"), lambda: self.share_mixtape(p, tracks))
+            item(_("Kein Mixtape mehr") if getattr(p, "mixtape", False) else _("Als Mixtape führen"),
+                 lambda: run(lambda: self.server.mark_mixtape(p.id, not getattr(p, "mixtape", False)),
+                             lambda _r: (self.reload_playlists(select=p.id), self.toast(_("Erledigt"))), self.toast))
+            item(_("Cover aus Bild …"), lambda: self.cover_dialog(p))
         col.append(Gtk.Separator(margin_top=4, margin_bottom=4))
 
         def delete():
@@ -296,6 +484,72 @@ class MoreMixin:
         albums("frequent", _("Oft gehört"))
         box.append(Gtk.Box(height_request=30))
         return self._page(_("Start"), self._scroll(box))
+
+    def new_page(self):
+        """Card bb728258: "Neu" like Music on macOS 26 – wide picture cards on top (eyebrow, title, artist), "Neueste Titel" as a grid
+        of rows in columns, then what came into the library lately. From the own server: newest by release year, newest added."""
+        from .window import run, clock
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.append(Gtk.Label(label=_("Neu"), xalign=0, css_classes=["large-title"], margin_start=28, margin_top=20, margin_bottom=8))
+        hero, songs, added = (Gtk.Box(orientation=Gtk.Orientation.VERTICAL) for _i in range(3))
+        for b in (hero, songs, added):
+            box.append(b)
+
+        def heading(holder, title):
+            holder.append(Gtk.Label(label=title, xalign=0, css_classes=["section-title"], margin_start=28, margin_top=16, margin_bottom=8))
+
+        def card(album):
+            c = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, width_request=340, css_classes=["hero-card"])
+            c.append(_label(_("NEUES ALBUM") if album.year else _("NEU"), "eyebrow"))
+            c.append(_label(album.title, "hero-title")); c.append(_label(album.artist, "dim"))
+            art = Cover(340, 12); art.set_size_request(340, 210); art.picture.set_size_request(340, 210); art.placeholder.set_size_request(340, 210)
+            art.set_margin_top(6)
+            server = self.server
+            art.show(server.cover_url(album.cover_id or album.id, 700), fallback=lambda: server.album_cover(album.id, 700))
+            c.append(art)
+            click = Gtk.GestureClick(); click.connect("released", lambda *_a: self.push(self.album_page(album.id)))
+            c.add_controller(click); c.set_cursor(Gdk.Cursor.new_from_name("pointer"))
+            return c
+
+        def show_hero(albums):
+            if not albums:
+                return
+            row = Gtk.Box(spacing=18, margin_start=28, margin_end=28)
+            for a in albums[:8]:
+                row.append(card(a))
+            sc = Gtk.ScrolledWindow(vscrollbar_policy=Gtk.PolicyType.NEVER, hscrollbar_policy=Gtk.PolicyType.AUTOMATIC, min_content_height=290)
+            sc.set_child(row); hero.append(sc)
+            # "Neueste Titel": the first titles of the newest albums, four rows per column like Music's grid.
+            run(lambda: [t for a in albums[:6] for t in self.server.album(a.id)[1][:3]][:16], show_songs)
+
+        def song_row(t, tracks):
+            r = Gtk.Box(spacing=10, width_request=320, hexpand=False, css_classes=["grid-song"])
+            c = Cover(40, 4); c.show(self.server.cover_url(t.cover_id, 80) if t.cover_id else None); r.append(c)
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, valign=Gtk.Align.CENTER)
+            for text, css in ((t.title, "title"), (t.artist, "dim caption")):
+                l = _label(text, css); l.set_ellipsize(3); l.set_max_width_chars(34); col.append(l)
+            r.append(col)
+            click = Gtk.GestureClick(); click.connect("released", lambda *_a: self.player.play(self.server, tracks, tracks.index(t)))
+            r.add_controller(click); r.set_cursor(Gdk.Cursor.new_from_name("pointer"))
+            return r
+
+        def show_songs(tracks):
+            if not tracks:
+                return
+            heading(songs, _("Neueste Titel"))
+            grid = Gtk.Grid(column_spacing=24, row_spacing=6, margin_start=28, margin_end=28)
+            for i, t in enumerate(tracks):
+                grid.attach(song_row(t, tracks), i // 4, i % 4, 1, 1)
+            sc = Gtk.ScrolledWindow(vscrollbar_policy=Gtk.PolicyType.NEVER, hscrollbar_policy=Gtk.PolicyType.AUTOMATIC, min_content_height=210)
+            sc.set_child(grid); songs.append(sc)
+
+        def show_added(albums):
+            if albums:
+                heading(added, _("Neu hinzugefügt"))
+                added.append(shelf([self.album_tile(a) for a in albums]))
+        run(lambda: self.server.albums("year", 12), show_hero)
+        run(lambda: self.server.albums("newest", 20), show_added)
+        return self._page(_("Neu"), self._scroll(box))
 
     def _mix_tile(self, title, sub, kind, css):
         b = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, width_request=180)

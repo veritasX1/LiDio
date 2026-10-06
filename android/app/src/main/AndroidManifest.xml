@@ -24,6 +24,14 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.LiDio">
+        <!-- "Als Datei teilen": the prepared file is handed to the chosen app for that one share, nothing else is readable. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.teilen"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/teilen" />
+        </provider>
         <activity
             android:name=".LockActivity"
             android:exported="false"
@@ -44,11 +52,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Shared titles: https://lisoft.goip.de/lidio/t#… opens LiDio directly (verified with lisoft.goip.de/.well-known/assetlinks.json). -->
+            <!-- Shared titles: https://lisoftware.de/lidio/t#… (older links: lisoft.goip.de) open LiDio directly – verified with
+                 /.well-known/assetlinks.json on both hosts, which lists both app variants and both signing keys (card a19168e0). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="lisoftware.de" android:pathPrefix="/lidio/t" />
                 <data android:scheme="https" android:host="lisoft.goip.de" android:pathPrefix="/lidio/t" />
             </intent-filter>
             <intent-filter>

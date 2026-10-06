@@ -70,6 +70,7 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
     val soft = Color.White.copy(alpha = 0.55f)
 
     var video by remember { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf(false) }
     // Lyrics (card 7ac89c11): looked for in the background as soon as a title plays; nothing found = nothing shown.
     var showLyrics by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -113,13 +114,6 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
                 Cover(server.cover(track, 200), Modifier.size(64.dp), 6.dp, onTint = { tint = it })
                 Column(Modifier.weight(1f).padding(start = 12.dp)) { Label(track.title, 17f, 600, white); Label(track.artist, 15f, color = soft) }
             }
-            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Toggle(Symbol.Shuffle, tr("Zufall"), playback.shuffle, Modifier.weight(1f)) { playback.toggleShuffle() }
-                Toggle(if (playback.repeat == Player.REPEAT_MODE_ONE) Symbol.RepeatOne else Symbol.Repeat, tr("Wiederholen"),
-                    playback.repeat != Player.REPEAT_MODE_OFF, Modifier.weight(1f)) { playback.cycleRepeat() }
-                // iOS: the third button – Autoplay ∞ goes on with similar music when the queue ends.
-                Toggle(Symbol.Infinity, tr("Autoplay"), playback.autoplay, Modifier.weight(1f)) { playback.toggleAutoplay() }
-            }
             QueueView(playback, server, Modifier.weight(1f))
         } else {
             // The art: full width while playing, a step smaller when paused (Apple's spring).
@@ -130,7 +124,11 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
                     if (state.modern) 14.dp else 10.dp, onTint = { tint = it })
             }
             Row(Modifier.fillMaxWidth().padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) { Label(track.title, 22f, 700, white); Label(track.artist, 20f, 400, soft) }
+                Column(Modifier.weight(1f)) {
+                    Label(track.title, 22f, 700, white)
+                    Label(track.artist, 20f, 400, soft, Modifier.clickable(enabled = track.artist.isNotBlank(), onClickLabel = tr("Zum Interpreten")) {
+                        onClose(); state.openArtist(track) })
+                }
                 // Like Music on iOS: "•••" opens the title's menu (share, go to the album, the music video).
                 var more by remember { mutableStateOf(false) }
                 // ★ like iOS: the favourite, kept on the server.
@@ -144,7 +142,8 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
                     Box(Modifier.size(32.dp).clip(CircleShape).background(white.copy(alpha = 0.15f))
                         .clickable(role = Role.Button, onClickLabel = tr("Mehr")) { more = true }
                         .semantics { contentDescription = tr("Mehr") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Ellipsis, white, 18.dp) }
-                    if (more) NowPlayingMenu(state, server, track, onVideo = { video = true }, onClose = onClose) { more = false }
+                    if (more) NowPlayingMenu(state, server, track, onVideo = { video = true }, onClose = onClose, onShare = { sharing = true }) { more = false }
+                    if (sharing) ShareChoice(state, server, track) { sharing = false }
                 }
             }
         }
@@ -172,13 +171,22 @@ fun NowPlaying(state: AppState, server: MusicServer, onClose: () -> Unit) {
                 fill = white.copy(alpha = 0.9f), track = white.copy(alpha = 0.25f), thumb = false)
             SymbolIcon(Symbol.SpeakerHigh, soft, 18.dp)
         }
-        // Three places like iOS's bottom row (lyrics · AirPlay · queue): lyrics · Winamp · queue. The music video is in "•••".
+        // Like iOS's bottom row (lyrics · AirPlay · queue): lyrics · order · Winamp · queue. The music video is in "•••".
         Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             // No text found: the button stays dim and does nothing – the listener is never disturbed (card 7ac89c11).
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(if (showLyrics) white.copy(alpha = 0.25f) else Color.Transparent)
                 .clickable(role = Role.Button, enabled = lyrics != null, onClickLabel = tr("Liedtext")) { showLyrics = !showLyrics; showQueue = false }
                 .semantics { contentDescription = if (lyrics != null) tr("Liedtext") else tr("Kein Liedtext") }, contentAlignment = Alignment.Center) {
                 SymbolIcon(Symbol.Quote, if (showLyrics) white else if (lyrics != null) soft else white.copy(alpha = 0.2f), 22.dp)
+            }
+            // Card 208e755b (Olaf 06.10.2026: "nicht drei buttons sondern alles in einem button … ein sauberes UI"): one button
+            // for the order – in order → shuffle → repeat all → repeat this title → in order. Its symbol shows the mode; off it
+            // stays dim like the others. Autoplay ∞ went to the settings (Wiedergabe).
+            val order = playback.order
+            Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(if (order != Order.InOrder) white.copy(alpha = 0.25f) else Color.Transparent)
+                .clickable(role = Role.Button, onClickLabel = tr("Reihenfolge ändern")) { playback.cycleOrder(); state.notice = playback.order.label() }
+                .semantics { contentDescription = tr("Reihenfolge: {mode}", "mode" to order.label()) }, contentAlignment = Alignment.Center) {
+                SymbolIcon(order.symbol, if (order != Order.InOrder) white else soft, 22.dp)
             }
             // The Winamp view – a gimmick, one tap away; LiDio remembers which view was last.
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp))
@@ -204,18 +212,9 @@ private fun Big(symbol: Symbol, label: String, size: Dp, onClick: () -> Unit) {
         .semantics { contentDescription = label }, contentAlignment = Alignment.Center) { SymbolIcon(symbol, Color.White, size) }
 }
 
-@Composable
-private fun Toggle(symbol: Symbol, label: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Row(modifier.clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = if (on) 0.9f else 0.15f))
-        .clickable(role = Role.Switch, onClick = onClick).semantics { contentDescription = "$label ${if (on) "an" else "aus"}" }.padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        SymbolIcon(symbol, if (on) Color.Black else Color.White, 20.dp)
-    }
-}
-
 /** The "•••" menu of Now Playing, shaped like an iOS menu: rounded, rows with a symbol on the right, a thin line between. */
 @Composable
-private fun NowPlayingMenu(state: AppState, server: MusicServer, track: Track, onVideo: () -> Unit, onClose: () -> Unit, onDismiss: () -> Unit) {
+private fun NowPlayingMenu(state: AppState, server: MusicServer, track: Track, onVideo: () -> Unit, onClose: () -> Unit, onShare: () -> Unit = {}, onDismiss: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val ink = Ink
@@ -228,10 +227,35 @@ private fun NowPlayingMenu(state: AppState, server: MusicServer, track: Track, o
             }
             // Titles from "Aus dem Netz" have no album on the server – there the entry would lead nowhere.
             val album = track.albumId?.takeIf { track.path?.contains("/Aus dem Netz/") != true }
-            row(tr("Teilen …"), Symbol.Share) { scope.launch { shareTrack(context, state, server, track) } }
+            row(tr("Teilen …"), Symbol.Share) { onShare() }
             if (album != null) row(tr("Zum Album"), Symbol.Albums) {
                 onClose(); state.tab = Tab.Library; state.stacks[Tab.Library] = listOf(Route.Library, Route.AlbumPage(album, web = track.path?.startsWith("https://") == true))
             }
+            // Card 17610c01 (Olaf 05.10.2026): load what is playing right from the player.
+            val fromNet = track.path?.startsWith("https://") == true
+            val account = state.account
+            if (fromNet) {
+                val hit = track.asHit(server)
+                val onPhone = WebDownloads.fileFor(track) != null
+                val laderJob = Lader.jobs[hit.key]?.first
+                // From the internet: like the ↓ in a list – onto this phone at once, onto the own server in the background.
+                if (!onPhone) row(tr("Laden"), Symbol.Downloaded) {
+                    WebDownloads.add(context, listOf(hit))
+                    account?.let { a -> scope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { if (Lader.available(a, state.address)) Lader.load(a, state.address, hit, null, null, null) } } }
+                }
+                // Already on the phone, not yet on the server: one button sends it there (LiDio-Lader).
+                else if (Variant.PRIVATE && account != null && laderJob == null) row(tr("Auf den Server übertragen"), Symbol.Server) {
+                    scope.launch {
+                        val err = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            runCatching { if (!Lader.available(account, state.address)) throw ServerError(tr("Braucht den LiDio-Lader auf dem Pi")); Lader.load(account, state.address, hit, null, null, null) }.exceptionOrNull() }
+                        state.notice = err?.message ?: tr("Wird auf den Server übertragen …")
+                    }
+                }
+            } else if (account != null && server.kind != ServerKind.Local && server.kind != ServerKind.Web && Offline.stored(context, account.id, track)?.first?.startsWith("d:") != true)
+                // From the own server: onto this phone for good (plays from there, also without the network) – also when it
+                // is only kept as "heard", which may be cleared again.
+                row(tr("Aufs Telefon laden"), Symbol.Downloaded) { Offline.download(context, account.id, server, listOf(track)); state.notice = tr("Wird aufs Telefon geladen …") }
+            if (track.artist.isNotBlank()) row(tr("Zum Interpreten"), Symbol.Artists) { onClose(); state.openArtist(track) }
             // iOS: AirPlay. Android: its output picker (phone speaker, Bluetooth, cast devices).
             row(tr("Ausgabegerät …"), Symbol.SpeakerHigh) { showOutputSwitcher(context) }
             if (Milk.loaded) row("Milkdrop-Visualisierung", Symbol.Sparkles, last = !Variant.PRIVATE) { onClose(); state.milk = true }

@@ -6,7 +6,7 @@ import android.util.Base64
 import org.json.JSONObject
 
 /** Where a playlist comes from – shown as a small mark next to it (card 561fa339). */
-enum class Source(val label: String) { Server(tr("Server")), Deezer("Deezer"), Spotify("Spotify") }
+enum class Source(val label: String) { Server(tr("Server")), Deezer("Deezer"), Spotify("Spotify"), Mixtape("Mixtape") }
 
 /** A public playlist elsewhere: shown, and on "Übertragen" compared with the own server like an imported list. */
 data class RemoteList(val source: Source, val id: String, val name: String, val owner: String = "", val count: Int = 0, val cover: String? = null)
@@ -115,6 +115,8 @@ object SpotifyEmbed {
  *  page) and Deezer links also when Deezer search is off (a link is the user's own choice). */
 object RemoteTracks {
     fun load(settings: Settings, list: RemoteList): Pair<RemoteList, List<Wanted>> {
+        // A received Mixtape (card c9b15c67): its titles travel in the link itself – the id is the packed list.
+        if (list.source == Source.Mixtape) return list to SharedList.unpack(list.id)
         val source = settings.publicSources().firstOrNull { it.source == list.source }
         source?.let { s -> runCatching { s.tracks(list.id) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return list to it } }
         if (Variant.PRIVATE) when (list.source) {

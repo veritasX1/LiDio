@@ -61,7 +61,7 @@ object Covers {
                 val bytes = connection.inputStream.use { it.readBytes() }
                 BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.also { file.writeBytes(bytes) }
             } finally { connection.disconnect() }
-        }.getOrNull()) ?: folder.listFiles { f -> f.name.startsWith("$picture-") }?.maxByOrNull { it.length() }?.let { BitmapFactory.decodeFile(it.path) }
+        }.onFailure { android.util.Log.w("LiDioCover", url, it) }.getOrNull()) ?: folder.listFiles { f -> f.name.startsWith("$picture-") }?.maxByOrNull { it.length() }?.let { BitmapFactory.decodeFile(it.path) }
         bitmap?.also { memory.put(url, it) }
     }
 
@@ -86,7 +86,14 @@ object Covers {
 /** A cover with rounded corners; while loading (or without art) Apple's grey square with a note. */
 @Composable
 fun Cover(url: String?, modifier: Modifier = Modifier, corner: Dp = 6.dp, onTint: ((Color) -> Unit)? = null,
-          fallback: (() -> String?)? = null) {
+          fallback: (() -> String?)? = null, colorFilter: androidx.compose.ui.graphics.ColorFilter? = null) {
+    // A Mixtape without an own cover: the drawn cassette with its name (see MixtapeArt).
+    if (url?.startsWith("mixtape:") == true) {
+        val dark = Ink.dark
+        androidx.compose.foundation.layout.Box(modifier.clip(RoundedCornerShape(corner))) { MixtapeArt(url.removePrefix("mixtape:")) }
+        androidx.compose.runtime.LaunchedEffect(url, dark) { onTint?.invoke(if (dark) Color(0xFF2A2724) else Color(0xFF3A3530)) }
+        return
+    }
     val context = LocalContext.current
     val preview = LocalInspectionMode.current
     var image by remember(url) { mutableStateOf<ImageBitmap?>(url?.let { Covers.cached(it) }?.asImageBitmap()) }
@@ -102,7 +109,7 @@ fun Cover(url: String?, modifier: Modifier = Modifier, corner: Dp = 6.dp, onTint
     LaunchedEffect(image) { if (image != null && url != null) Covers.cached(url)?.let { onTint?.invoke(Covers.tint(it)) } }
     Box(modifier.clip(RoundedCornerShape(corner))) {
         val shown = image
-        if (shown != null) Image(shown, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        if (shown != null) Image(shown, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, colorFilter = colorFilter)
         else Placeholder()
     }
 }
@@ -118,5 +125,9 @@ private fun Placeholder() {
 }
 
 /** A cover id that is already a full address (titles from the internet) is used as it is – any screen may show them. */
+/** A playlist's picture: a Mixtape without an own cover gets the drawn cassette with its name (Olaf 06.10.2026). */
+fun MusicServer.playlistCover(p: Playlist, size: Int = 300, orElse: String? = null): String? =
+    if (p.mixtape && !p.ownCover) "mixtape:" + p.name else cover(p.coverId ?: orElse, size)
+
 fun MusicServer.cover(id: String?, size: Int = 300): String? = id?.let { if (it.startsWith("http")) it else coverUrl(it, size) }
 fun MusicServer.cover(track: Track, size: Int = 300): String? = track.coverId?.let { if (it.startsWith("http")) it else coverUrl(it, size) } ?: track.artUrl

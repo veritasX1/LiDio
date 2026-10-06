@@ -71,12 +71,13 @@ fun WebLoadButton(hit: WebHit, state: AppState? = null, playlistId: String? = nu
     val ink = Ink
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val job = WebDownloads.jobs.lastOrNull { it.hit.key == hit.key }
+    val job = WebDownloads.jobFor(hit.key)
     // Card a984b806: ↓ asks where to – this phone or the own server (LiDio-Lader on the Pi), like an iOS action sheet.
     var asking by remember { mutableStateOf(false) }
     var laderThere by remember { mutableStateOf<Boolean?>(null) }
     val server = Lader.jobs[hit.key]
-    if (server != null) {
+    // The phone's own copy comes first (it plays at once); the server's state shows only when there is no phone job.
+    if (server != null && job == null) {
         val (st, note) = server
         LaunchedEffect(st) {
             while (state != null && st !in setOf("fertig", "fehler")) {
@@ -85,7 +86,7 @@ fun WebLoadButton(hit: WebHit, state: AppState? = null, playlistId: String? = nu
                 withContext(Dispatchers.IO) { Lader.poll(a, state.address) }
                 if (Lader.jobs[hit.key]?.first != st) break
             }
-            if (st == "fertig") { state?.generation = (state?.generation ?: 0) + 1 }
+            if (st == "fertig") { Keep.onServer(context, hit.key); state?.generation = (state?.generation ?: 0) + 1 }
         }
         Box(Modifier.size(36.dp).semantics { contentDescription = when (st) { "fertig" -> tr("Auf dem Server"); "fehler" -> tr("Auf den Server laden ging nicht: {note}", "note" to note); else -> tr("Wird auf den Server geladen") } },
             contentAlignment = Alignment.Center) {
@@ -119,7 +120,15 @@ fun WebLoadButton(hit: WebHit, state: AppState? = null, playlistId: String? = nu
     }
     Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) {
         when (job?.state) {
-            null -> if (state != null && Variant.PRIVATE) asking = true else WebDownloads.add(context, listOf(hit))
+            // Olaf 05.10.2026: ↓ loads onto the phone at once – no question; the own server fetches it quietly in the
+            // background when the LiDio-Lader is there (a slow server never keeps the music waiting).
+            null -> {
+                WebDownloads.add(context, listOf(hit))
+                val a = state?.account
+                if (Variant.PRIVATE && a != null) scope.launch(Dispatchers.IO) {
+                    runCatching { if (Lader.available(a, state.address)) Lader.load(a, state.address, hit, playlistId, line, position) }
+                }
+            }
             WebJob.State.Failed -> WebDownloads.retry(context, job.id)
             WebJob.State.Waiting, WebJob.State.Loading -> WebDownloads.remove(context, job.id, deleteFile = true)
             else -> {}
@@ -130,7 +139,7 @@ fun WebLoadButton(hit: WebHit, state: AppState? = null, playlistId: String? = nu
             WebJob.State.Done -> SymbolIcon(Symbol.Check, ink.secondary, 18.dp, weight = 2.4f)
             WebJob.State.Failed -> Label("!", 20f, 700, Red)
             WebJob.State.Waiting -> WaitingRing()
-            else -> ProgressRing(if (job.state == WebJob.State.Loading) job.progress else null, ink.tint)
+            else -> ProgressRing(if (job.state == WebJob.State.Loading) WebDownloads.progress[job.id] else null, ink.tint)
         }
     }
 }
@@ -145,7 +154,9 @@ fun ProgressRing(progress: Float?, color: Color, size: androidx.compose.ui.unit.
     Canvas(Modifier.size(size)) {
         val w = 2.5.dp.toPx()
         val r = Size(this.size.width - w, this.size.height - w)
-        drawArc(ink.fill, 0f, 360f, false, Offset(w / 2, w / 2), r, style = Stroke(w))
+        // Card 1092956d: the track in the ring's own colour, faint – on a coloured album page ink.fill was as light as the
+        // arc, and the progress could not be seen.
+        drawArc(color.copy(alpha = 0.22f), 0f, 360f, false, Offset(w / 2, w / 2), r, style = Stroke(w))
         if (progress != null && progress > 0f) drawArc(color, -90f, 360f * progress.coerceIn(0f, 1f), false, Offset(w / 2, w / 2), r, style = Stroke(w, cap = StrokeCap.Round))
         else drawArc(color, -90f + spin, 60f, false, Offset(w / 2, w / 2), r, style = Stroke(w, cap = StrokeCap.Round))
         val s = this.size.width * 0.3f
@@ -170,7 +181,7 @@ fun WebHitRow(hit: WebHit, showSource: Boolean = true) {
     val ink = Ink
     val context = LocalContext.current
     Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = tr("Laden")) {
-            if (WebDownloads.jobs.none { it.hit.key == hit.key && it.state != WebJob.State.Failed }) WebDownloads.add(context, listOf(hit)) }
+            if (WebDownloads.jobFor(hit.key).let { it == null || it.state == WebJob.State.Failed }) WebDownloads.add(context, listOf(hit)) }
         .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Cover(hit.thumbnail, Modifier.size(48.dp), 5.dp)
         Column(Modifier.weight(1f).padding(start = 12.dp, end = 8.dp)) {
@@ -203,7 +214,7 @@ fun LazyListScope.webSearch(state: AppState, asked: String, source: WebSource, r
                     SourceBadge(hits.first().source)
                     Label(tr("{size} Titel", "size" to hits.size), 13f, color = Ink.secondary, modifier = Modifier.padding(start = 8.dp))
                 }
-                val open = hits.filter { h -> WebDownloads.jobs.none { it.hit.key == h.key && it.state != WebJob.State.Failed } }
+                val open = hits.filter { h -> WebDownloads.jobFor(h.key).let { it == null || it.state == WebJob.State.Failed } }
                 Capsule(Symbol.Downloaded, if (open.isEmpty()) tr("Alle in der Warteschlange") else tr("Alle {size} laden", "size" to open.size), Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     WebDownloads.add(context, open)
                 }
@@ -291,7 +302,7 @@ private fun JobRow(job: WebJob) {
                 Label(when (job.state) {
                     WebJob.State.Waiting -> "Wartet"
                     WebJob.State.Failed -> "Fehlgeschlagen"
-                    else -> job.note
+                    else -> WebDownloads.progress[job.id].let { WebDownloads.noteOf(job) }
                 }, 13f, color = if (job.state == WebJob.State.Failed) Red else ink.secondary, modifier = Modifier.padding(start = 6.dp))
             }
             // The reason in German; the loader's own line stays in the queue file for questions.
@@ -309,19 +320,88 @@ fun Track.asHit(server: MusicServer) = WebHit(path ?: Variant.watch(id), title, 
 
 /** Album/playlist from the internet: the App Store's ↓ in the navigation bar loads all its titles; a ring while they come in. */
 @Composable
-fun WebListButton(hits: List<WebHit>) {
+fun WebListButton(hits: List<WebHit>, state: AppState? = null, playlist: String? = null, cover: String? = null) {
     val ink = Ink
     val context = LocalContext.current
-    val jobs = WebDownloads.jobs.filter { j -> hits.any { it.key == j.hit.key } }
+    val jobs = hits.mapNotNull { WebDownloads.jobFor(it.key) }
     val done = jobs.count { it.state == WebJob.State.Done }
     val busy = jobs.any { it.state == WebJob.State.Waiting || it.state == WebJob.State.Loading || it.state == WebJob.State.Converting }
-    Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, enabled = !busy && done < hits.size) { WebDownloads.add(context, hits) }
-        .semantics { contentDescription = when { done == hits.size -> tr("Alle geladen"); busy -> tr("Wird geladen, {done} von {size}", "done" to done, "size" to hits.size); else -> tr("Alle {size} laden", "size" to hits.size) } },
+    // Olaf 05.10.2026: a list that is loading can be stopped – a tap asks, like the server lists' button.
+    var asking by remember { mutableStateOf(false) }
+    if (asking) Ask(tr("Laden abbrechen?"), tr("Was schon geladen ist, bleibt auf dem Telefon."), tr("Laden stoppen"), onYes = {
+        asking = false
+        // Waiting ones first, so the loader doesn't pick up the next title while the running one is stopped.
+        val open = jobs.filter { it.state != WebJob.State.Done && it.state != WebJob.State.Failed }
+        open.sortedBy { if (it.state == WebJob.State.Waiting) 0 else 1 }.forEach { WebDownloads.remove(context, it.id, deleteFile = true) }
+    }, onNo = { asking = false })
+    // Card 55744d14 (Olaf 06.10.2026): a playlist from the internet can come along as a playlist on the own server – switch on
+    // by default. Only where the own server can take it (Emby/Jellyfin with the LiDio-Lader).
+    val account = state?.account
+    val canServer = playlist != null && Variant.PRIVATE && account != null && (account.kind == ServerKind.Emby || account.kind == ServerKind.Jellyfin)
+    var choosing by remember { mutableStateOf(false) }
+    var asPlaylist by remember { mutableStateOf(true) }
+    if (choosing && state != null && playlist != null) MenuSheet(tr("Laden"), playlist, { choosing = false }) {
+        ListRow(tr("Als Playlist auf den Server"), tr("In dieser Reihenfolge, mit Bild"), height = 60.dp,
+            trailing = { IosSwitch(asPlaylist, tr("Als Playlist auf den Server")) { asPlaylist = it } })
+        MenuRow(tr("Alle {size} laden", "size" to hits.size), Symbol.Downloaded, last = true) {
+            choosing = false
+            ListToServer.start(context, state, playlist, cover, hits, asPlaylist)
+        }
+    }
+    Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, enabled = busy || done < hits.size) {
+        if (busy) asking = true else if (canServer) choosing = true else WebDownloads.add(context, hits) }
+        .semantics { contentDescription = when { done == hits.size -> tr("Alle geladen"); busy -> tr("Wird geladen, {done} von {size} – antippen bricht ab", "done" to done, "size" to hits.size); else -> tr("Alle {size} laden", "size" to hits.size) } },
         contentAlignment = Alignment.Center) {
         when {
             hits.isNotEmpty() && done == hits.size -> SymbolIcon(Symbol.Check, ink.secondary, 18.dp, weight = 2.4f)
             busy -> ProgressRing(done.toFloat() / hits.size.coerceAtLeast(1), ink.tint)
             else -> SymbolIcon(Symbol.Downloaded, ink.tint, 26.dp)
+        }
+    }
+}
+
+/** Card 55744d14: a whole playlist from the internet onto the phone and the own server, optionally as a playlist there. What the
+ *  server has comes from the server (no second copy); what it lacks comes from the internet onto the phone and – through the
+ *  LiDio-Lader – into the library, at its place in the new playlist. Runs in the background; short notes at the top. */
+object ListToServer {
+    private val scope = kotlinx.coroutines.MainScope()
+
+    fun start(context: android.content.Context, state: AppState, name: String, cover: String?, hits: List<WebHit>, asPlaylist: Boolean) {
+        val account = state.account ?: return
+        state.notice = tr("Sucht die Titel auf deinem Server …")
+        scope.launch {
+            val error = withContext(Dispatchers.IO) {
+                runCatching {
+                    val address = state.address.ifEmpty { account.address }
+                    val own = state.serverFor(account.copy(address = address))
+                    val results = Matcher.run(own, hits.map { Wanted(it.title, it.artist, it.album ?: "", it.duration) })
+                    val found = results.mapIndexedNotNull { i, r -> r.track?.takeIf { r.match == Match.Found }?.let { i to it } }
+                    val missing = hits.indices.filter { i -> found.none { it.first == i } }
+                    // On the phone: the server's copies of what it has, the internet's of the rest.
+                    if (found.isNotEmpty()) Offline.download(context, account.id, own, found.map { it.second })
+                    WebDownloads.add(context, missing.map { hits[it] })
+                    val lader = Lader.available(account, address)
+                    var made: Playlist? = null
+                    if (asPlaylist) {
+                        made = own.createPlaylist(name, found.map { it.second })
+                        val lines = missing.map { i -> "${i + 1} · ${hits[i].artist} – ${hits[i].title}" }
+                        if (lines.isNotEmpty()) own.noteMissing(made.id, lines)
+                        cover?.let { url -> runCatching { java.net.URL(url).openStream().use { it.readBytes() } }.getOrNull()?.let { own.setPlaylistCover(made.id, it) } }
+                    }
+                    // The missing ones into the library – in ascending order, so each lands at its place in the playlist.
+                    if (lader) missing.forEach { i ->
+                        val line = "${i + 1} · ${hits[i].artist} – ${hits[i].title}"
+                        runCatching { Lader.load(account, address, hits[i], made?.id, if (made != null) line else null, if (made != null) i + 1 else null) }
+                    }
+                    withContext(Dispatchers.Main) {
+                        state.notice = (if (made != null) tr("„{name}“ auf dem Server angelegt", "name" to name) + " – " else "") +
+                            tr("{found} vom Server, {missing} aus dem Netz", "found" to found.size, "missing" to missing.size) +
+                            if (missing.isNotEmpty() && !lader) tr(" (der Server lädt nichts nach – kein LiDio-Lader)") else ""
+                        state.generation++
+                    }
+                }.exceptionOrNull()
+            }
+            if (error != null) state.notice = error.message ?: tr("Laden ging nicht.")
         }
     }
 }
@@ -352,6 +432,10 @@ object MissingHits {
     }
     fun known(context: android.content.Context, line: String): Track? { load(context); return memory[MissingNote.label(line)] }
     fun nothing(line: String) = MissingNote.label(line) in none
+    /** A title already known from the source (an album's list): no search needed. */
+    fun remember(context: android.content.Context, line: String, track: Track) {
+        load(context); if (memory.put(MissingNote.label(line), track) == null) save(context)
+    }
     /** Blocking: looks the title up at the music source (only where the variant has one). */
     fun find(context: android.content.Context, line: String): Track? {
         known(context, line)?.let { return it }
@@ -361,6 +445,43 @@ object MissingHits {
         if (t == null) none += MissingNote.label(line) else { memory[MissingNote.label(line)] = t; save(context) }
         return t
     }
+}
+
+/** Card c569f2c1 (Olaf 06.10.2026: "die fehlenden Lieder müssen gelistet werden und zum download angeboten werden"):
+ *  LiDio privat looks the album up at its music source; what the own server lacks of it stands grey at its place, like the
+ *  missing titles of a playlist ("3 · Interpret – Titel"). The source's own titles are remembered, so cover and length are
+ *  there at once and a tap plays exactly that version. Kept per album for the session. */
+object AlbumGaps {
+    /** What the server lacks ("3 · Interpret – Titel") and every title's place on the album (normalised title → 1, 2, …) –
+     *  titles the LiDio-Lader brought have no track number, the order comes from the source then. */
+    data class Gaps(val missing: List<String> = emptyList(), val order: Map<String, Int> = emptyMap())
+    private val memory = java.util.concurrent.ConcurrentHashMap<String, Gaps>()
+
+    /** Blocking. Empty when the variant has no music source, the album isn't found there, or nothing is missing. */
+    fun find(context: android.content.Context, server: MusicServer, album: Album, tracks: List<Track>): Gaps {
+        if (server.kind == ServerKind.Web || album.title.isBlank()) return Gaps()
+        val cacheKey = "${album.id}:${tracks.size}"
+        memory[cacheKey]?.let { return it }
+        val web = Variant.webServer(context) ?: return Gaps()
+        val artist = album.artist.ifBlank { tracks.firstOrNull()?.artist ?: "" }
+        val title = Matcher.normal(album.title)
+        val match = runCatching { web.search("$artist ${album.title}").albums }.getOrDefault(emptyList())
+            .filter { Matcher.similar(it.title, album.title) >= 0.85 || (title.length >= 4 && Matcher.normal(it.title).startsWith(title)) }
+            .maxByOrNull { Matcher.similar(it.title, album.title) + Matcher.artistScore(artist, it.artist) }
+            ?.takeIf { Matcher.artistScore(artist, it.artist) >= 0.5 } ?: return Gaps().also { memory[cacheKey] = it }
+        val online = runCatching { web.album(match.id).second }.getOrDefault(emptyList())
+        val have = tracks.map { Matcher.normal(it.title) }
+        val missing = online.withIndex().filter { (_, t) -> have.none { h -> h == Matcher.normal(t.title) || Matcher.similar(h, t.title) >= 0.9 } }
+            .map { (i, t) -> "${i + 1} · ${t.artist.ifBlank { artist }} – ${t.title}" to t }
+        missing.forEach { (line, t) -> MissingHits.remember(context, line, t) }
+        val order = online.withIndex().associate { (i, t) -> Matcher.normal(t.title) to i + 1 }
+        return Gaps(missing.map { it.first }, order).also { memory[cacheKey] = it }
+    }
+
+    /** The server's titles in the album's order: their own number first, else their place at the source. */
+    fun sorted(tracks: List<Track>, order: Map<String, Int>): List<Track> =
+        if (order.isEmpty() || tracks.all { it.number != null }) tracks
+        else tracks.withIndex().sortedBy { (i, t) -> order[Matcher.normal(t.title)] ?: t.number ?: (1000 + i) }.map { it.value }
 }
 
 /** Above the playlist when titles are missing: how many, and (LiDio privat) "Alle laden". */
@@ -399,9 +520,41 @@ fun MissingTrackRow(state: AppState, line: String, playlistId: String? = null, d
     val tick = MissingTick.value.intValue
     var found by remember(line, tick) { mutableStateOf(MissingHits.known(context, line)) }
     val web = remember { Variant.webServer(context) }
-    Row(Modifier.fillMaxWidth().clickable(enabled = web != null, role = Role.Button, onClickLabel = tr("Aus dem Netz spielen")) {
+    // Loaded onto this phone (Olaf 05.10.2026): the row is a normal title now – full colour, the phone instead of the
+    // cloud, a tap plays the file. It leaves the list of missing ones once the server has it.
+    val onPhone = found?.let { WebDownloads.fileFor(it) } != null
+    @Suppress("NAME_SHADOWING") val dim = dim && !onPhone
+    // On the phone but not yet on the server: the LiDio-Lader fetches it quietly into the library and puts it at its
+    // place in the playlist; when it is done, the playlist reloads and the row is an ordinary server title.
+    if (onPhone && Variant.PRIVATE && playlistId != null) {
+        val hit = found?.let { t -> web?.let { t.asHit(it) } }
+        LaunchedEffect(hit?.key) {
+            val a = state.account ?: return@LaunchedEffect
+            if (hit == null) return@LaunchedEffect
+            if (Lader.jobs[hit.key] == null) withContext(Dispatchers.IO) {
+                runCatching { if (Lader.available(a, state.address)) Lader.load(a, state.address, hit, playlistId, line, MissingNote.position(line)) }
+            }
+            while (Lader.jobs[hit.key]?.first.let { it != null && it !in setOf("fertig", "fehler") }) {
+                kotlinx.coroutines.delay(4000)
+                withContext(Dispatchers.IO) { runCatching { Lader.poll(a, state.address) } }
+            }
+            if (Lader.jobs[hit.key]?.first == "fertig") { Keep.onServer(context, hit.key); state.generation++ }
+        }
+    }
+    Row(Modifier.fillMaxWidth().clickable(enabled = web != null, role = Role.Button, onClickLabel = tr("Spielen und laden")) {
             scope.launch { (found ?: withContext(Dispatchers.IO) { MissingHits.find(context, line) })?.let { t -> found = t
-                if (onPlay != null) onPlay(t) else web?.let { state.playback.play(it, listOf(t)) } } } }
+                if (onPlay != null) onPlay(t) else web?.let { state.playback.play(it, listOf(t)) }
+                // Olaf 05.10.2026: a tap on a missing title plays it AND loads it – onto the phone and onto the server.
+                web?.let { w ->
+                    val hit = t.asHit(w)
+                    if (WebDownloads.fileFor(t) == null && WebDownloads.jobFor(hit.key).let { it == null || it.state == WebJob.State.Failed })
+                        WebDownloads.add(context, listOf(hit))
+                    val a = state.account
+                    if (Variant.PRIVATE && a != null && playlistId != null) launch(Dispatchers.IO) {
+                        runCatching { if (Lader.available(a, state.address)) Lader.load(a, state.address, hit, playlistId, line, MissingNote.position(line)) }
+                    }
+                }
+            } } }
         .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp).semantics { contentDescription = "${wanted.title}${if (dim) ", fehlt auf dem Server" else ""}" },
         verticalAlignment = Alignment.CenterVertically) {
         number?.let { Label("$it", 15f, color = ink.secondary, tabular = true, modifier = Modifier.padding(end = 10.dp)) }
@@ -415,12 +568,13 @@ fun MissingTrackRow(state: AppState, line: String, playlistId: String? = null, d
         }
         // Cloud: out in the internet. Crossed out (grey): nowhere to be had – the public LiDio loads nothing from the internet,
         // Nothing found at the music source, or loading failed (e.g. blocked in Germany).
-        val failed = found?.let { t -> web?.let { w -> WebDownloads.jobs.lastOrNull { it.hit.key == t.asHit(w).key }?.state == WebJob.State.Failed } } == true
-        val nowhere = web == null || MissingHits.nothing(line) || failed
-        SymbolIcon(if (nowhere) Symbol.CloudOff else Symbol.Cloud, ink.tertiary, 15.dp, modifier = Modifier.padding(end = 8.dp)
+        val failed = found?.let { t -> web?.let { w -> WebDownloads.jobFor(t.asHit(w).key)?.state == WebJob.State.Failed } } == true
+        val nowhere = !onPhone && (web == null || MissingHits.nothing(line) || failed)
+        if (onPhone) SymbolIcon(Symbol.Phone, ink.secondary, 14.dp, modifier = Modifier.padding(end = 8.dp).semantics { contentDescription = tr("Auf diesem Telefon") })
+        else SymbolIcon(if (nowhere) Symbol.CloudOff else Symbol.Cloud, ink.tertiary, 15.dp, modifier = Modifier.padding(end = 8.dp)
             .semantics { contentDescription = if (nowhere) tr("Nirgends zu bekommen") else tr("Nicht auf dem Server – im Internet") })
         found?.duration?.takeIf { it > 0 }?.let { Label(duration(it), 13f, color = if (dim) ink.tertiary else ink.secondary, tabular = true, modifier = Modifier.padding(end = 4.dp)) }
-        if (web != null) {
+        if (web != null && !onPhone) {
             val hit = found?.asHit(web)
             if (hit != null) WebLoadButton(hit, state, playlistId, line, MissingNote.position(line))
             else if (!MissingHits.nothing(line)) Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) {

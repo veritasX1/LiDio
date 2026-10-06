@@ -28,6 +28,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -57,7 +58,7 @@ fun chromePadding() = PaddingValues(bottom = LocalBottomChrome.current)
 
 /** Liquid glass: the blurred background, a light tint, a thin bright rim and a soft shadow. */
 @Composable
-fun Modifier.glass(shape: Shape, elevation: Dp = 12.dp): Modifier {
+fun Modifier.glass(shape: Shape, elevation: Dp = 12.dp, blur: Boolean = true): Modifier {
     val ink = Ink
     val haze = LocalHaze.current
     val tint = if (ink.dark) Color(0xFF2C2C2E).copy(alpha = 0.55f) else Color.White.copy(alpha = 0.62f)
@@ -65,7 +66,7 @@ fun Modifier.glass(shape: Shape, elevation: Dp = 12.dp): Modifier {
         else listOf(Color.White.copy(alpha = 0.9f), Color.Black.copy(alpha = 0.06f)))
     return this.shadow(elevation, shape, ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.25f))
         .clip(shape)
-        .then(if (haze != null) Modifier.hazeEffect(haze, HazeStyle(backgroundColor = ink.background, tint = HazeTint(tint), blurRadius = 22.dp, noiseFactor = 0f))
+        .then(if (haze != null && blur) Modifier.hazeEffect(haze, HazeStyle(backgroundColor = ink.background, tint = HazeTint(tint), blurRadius = 22.dp, noiseFactor = 0f))
               else Modifier.background(tint))
         .border(0.75.dp, rim, shape)
 }
@@ -73,7 +74,13 @@ fun Modifier.glass(shape: Shape, elevation: Dp = 12.dp): Modifier {
 /** A round glass button (iOS 26's back button and toolbar buttons). */
 @Composable
 fun GlassCircle(symbol: Symbol, description: String, size: Dp = 44.dp, onClick: () -> Unit) {
-    Box(Modifier.size(size).glass(CircleShape, 6.dp).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description },
+    // Card a41ad630: Android draws the elevation shadow of a small circle as a polygon, and it showed through the
+    // translucent glass as a pale octagon behind the symbol. So no elevation and no blur here – a soft round shadow
+    // is painted by hand instead.
+    Box(Modifier.size(size).drawBehind {
+            drawCircle(Color.Black.copy(alpha = 0.05f), radius = this.size.minDimension / 2 + 1.5f.dp.toPx(), center = center.copy(y = center.y + 1.5f.dp.toPx()))
+            drawCircle(Color.Black.copy(alpha = 0.025f), radius = this.size.minDimension / 2 + 3.dp.toPx(), center = center.copy(y = center.y + 2.5f.dp.toPx()))
+        }.glass(CircleShape, 0.dp, blur = false).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = description },
         contentAlignment = Alignment.Center) {
         SymbolIcon(symbol, Ink.label, size * 0.45f, weight = 2.4f)
     }
@@ -106,7 +113,7 @@ fun ModernChrome(state: AppState, server: MusicServer, modifier: Modifier = Modi
                 Spacer(Modifier.width(10.dp))
             } else {
                 Row(Modifier.weight(1f).height(62.dp).glass(RoundedCornerShape(31.dp)).padding(4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Tab.entries.filter { it != Tab.Search }.forEach { tab -> ModernTab(state, tab, Modifier.weight(1f).tourAnchor(if (tab == Tab.Start) "start" else "mediathek")) }
+                    Tab.entries.filter { it != Tab.Search }.forEach { tab -> ModernTab(state, tab, Modifier.weight(1f).tourAnchor(when (tab) { Tab.Start -> "start"; Tab.New -> "neu"; else -> "mediathek" })) }
                 }
                 Spacer(Modifier.width(12.dp))
             }

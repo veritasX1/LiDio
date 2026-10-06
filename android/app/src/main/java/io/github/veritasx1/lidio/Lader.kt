@@ -46,12 +46,52 @@ object Lader {
 
     /** Hands a title to the Lader (blocking); afterwards its state is followed with poll(). */
     fun load(account: Account, address: String, hit: WebHit, playlistId: String? = null, line: String? = null, position: Int? = null) {
+        // One job per title: a second tap or a second screen does not send it again.
+        if (jobs[hit.key]?.first.let { it != null && it != "fehler" }) return
         val b = base(account, address) ?: throw ServerError(tr("Nur mit Emby oder Jellyfin."))
         val w = line?.let { MissingNote.wanted(it) }
-        val body = JSONObject().put("url", hit.url).put("artist", w?.artist?.ifEmpty { null } ?: hit.artist).put("title", w?.title ?: hit.title)
+        // Some imported lists only know the title ("Asereje – Asereje"): then the source's artist is the better one.
+        val artist = w?.artist?.takeIf { it.isNotEmpty() && !it.equals(w.title, ignoreCase = true) } ?: hit.artist
+        val body = JSONObject().put("url", hit.url).put("artist", artist).put("title", w?.title ?: hit.title)
             .put("album", hit.album ?: "").put("playlistId", playlistId).put("line", line).put("position", position)
         val id = JSONObject(request("$b/laden", account, body.toString())).getString("id")
         ids[hit.key] = id; jobs[hit.key] = "wartet" to ""
+    }
+
+    /** Card e1f44cfb: one file (a song, a cover picture or a ZIP) into the shared upload folder "Hochgeladen/<batch>" on the
+     *  server – streamed, with progress 0..1. Blocking. */
+    fun upload(account: Account, address: String, batch: String, name: String, size: Long, input: java.io.InputStream, sub: String = "",
+               several: Boolean = false, progress: (Float) -> Unit) {
+        val b = base(account, address) ?: throw ServerError(tr("Nur mit Emby oder Jellyfin."))
+        // sub: the file's folder inside a chosen folder (album folders); several: more than one ZIP – each becomes its own album.
+        val c = URL("$b/hochladen?batch=${Http.encode(batch)}&name=${Http.encode(name)}&sub=${Http.encode(sub)}" + if (several) "&several=1" else "")
+            .openConnection() as HttpURLConnection
+        c.connectTimeout = 5000; c.readTimeout = 120_000
+        c.requestMethod = "POST"; c.doOutput = true
+        c.setRequestProperty("X-Emby-Token", account.secret); c.setRequestProperty("X-LiDio-User", account.userId)
+        c.setRequestProperty("Content-Type", "application/octet-stream")
+        c.setFixedLengthStreamingMode(size)
+        try {
+            c.outputStream.use { out ->
+                val buffer = ByteArray(256 * 1024); var sent = 0L
+                input.use { inp -> while (true) { val n = inp.read(buffer); if (n < 0) break; out.write(buffer, 0, n); sent += n; progress(sent.toFloat() / size.coerceAtLeast(1)) } }
+            }
+            if (c.responseCode !in 200..299) throw ServerError(runCatching { JSONObject(c.errorStream.bufferedReader().readText()).optString("error") }.getOrNull() ?: tr("Lader: Fehler {responseCode}", "responseCode" to c.responseCode))
+        } finally { c.disconnect() }
+    }
+
+    /** The batch is complete: the server reads it in and, with a name, makes a playlist of it. Returns the job id. */
+    /** albums: the album folders that should become playlists ("" = the loose files, named after the batch) – none by default. */
+    fun finishUpload(account: Account, address: String, batch: String, albums: List<String>): String {
+        val b = base(account, address) ?: throw ServerError(tr("Nur mit Emby oder Jellyfin."))
+        val body = JSONObject().put("batch", batch).put("playlist", batch).put("albums", org.json.JSONArray(albums))
+        return JSONObject(request("$b/hochladen/fertig", account, body.toString())).getString("id")
+    }
+
+    /** One job's state and note, or null. */
+    fun status(account: Account, address: String, id: String): Pair<String, String>? {
+        val b = base(account, address) ?: return null
+        return runCatching { JSONObject(request("$b/status?ids=$id", account)).optJSONObject(id) }.getOrNull()?.let { it.optString("state") to it.optString("note") }
     }
 
     /** Asks for the states of running jobs (blocking). */

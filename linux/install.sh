@@ -14,6 +14,8 @@ chmod +x "$HOME/.local/bin/lidio"
 cp "data/$APP_ID.svg" "$DATA/icons/hicolor/scalable/apps/$APP_ID.svg"
 sed "s|@EXEC@|$HOME/.local/bin/lidio|" "data/$APP_ID.desktop.in" > "$DATA/applications/$APP_ID.desktop"
 update-desktop-database "$DATA/applications" 2>/dev/null || true
+# The handwriting for Mixtape covers (Caveat, OFL) – also for older Pango that can't load it from the app folder.
+mkdir -p "$DATA/fonts" && cp data/fonts/Caveat.ttf "$DATA/fonts/LiDio-Caveat.ttf" && (fc-cache -f "$DATA/fonts" >/dev/null 2>&1 || true)
 # PNG versions for places that do not render SVG icons.
 python3 - "$DATA" "data/$APP_ID.svg" "$APP_ID" <<'PY' || true
 import sys, gi

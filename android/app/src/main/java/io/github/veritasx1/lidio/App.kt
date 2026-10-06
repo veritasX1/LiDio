@@ -59,6 +59,10 @@ sealed interface Route {
     data object Servers : Route
     data object Downloaded : Route
     data object Import : Route
+    data object Upload : Route
+    data object Mixtapes : Route
+    data class AddMusic(val playlistId: String, val name: String, val mixtape: Boolean = false) : Route
+    data class CoverCrop(val playlistId: String, val name: String) : Route
     data object Skins : Route
     /** "Aus dem Netz" – only LiDio privat (card 1843f577). */
     data object Web : Route
@@ -70,7 +74,7 @@ sealed interface Route {
     data object Guide : Route
     data class RemotePage(val list: RemoteList) : Route
     /** cover: the source's playlist picture (Deezer, Spotify) – goes to the server with the new playlist. */
-    data class ImportWith(val name: String, val wanted: List<Wanted>, val cover: String? = null) : Route
+    data class ImportWith(val name: String, val wanted: List<Wanted>, val cover: String? = null, val mixtape: Boolean = false) : Route
     /** web = from "Im Netz" while the own server is in use. */
     data class ArtistPage(val id: String, val name: String, val web: Boolean = false) : Route
     data class AlbumPage(val id: String, val web: Boolean = false) : Route
@@ -78,7 +82,8 @@ sealed interface Route {
 }
 
 enum class Tab(val label: String, val symbol: Symbol, val root: Route?) {
-    Start(tr("Start"), Symbol.Home, null), Library(tr("Mediathek"), Symbol.Library, Route.Library), Search(tr("Suchen"), Symbol.Search, null)
+    Start(tr("Start"), Symbol.Home, null), New(tr("Neu"), Symbol.Sparkle, null), Library(tr("Mediathek"), Symbol.Library, Route.Library),
+    Search(tr("Suchen"), Symbol.Search, null)
 }
 
 /** The app's state: accounts, the server in use, the player and the way through each tab. */
@@ -121,6 +126,11 @@ class AppState(val accounts: Accounts, val playback: Playback, val serverFor: (A
 
     fun stack(tab: Tab = this.tab): List<Route> = stacks[tab] ?: listOfNotNull(tab.root)
     fun open(route: Route) { stacks[tab] = stack() + route }
+    /** A title's artist (Now Playing): the first named one, looked up by name on the title's own source. */
+    fun openArtist(track: Track) {
+        val name = track.artist.split(", ", " & ", " feat. ", " Feat. ", " ft. ", " x ").first().trim()
+        open(Route.ArtistPage("", name, web = track.path?.startsWith("https://") == true))
+    }
     fun back(): Boolean { val s = stack(); if (s.size <= 1 && (tab.root != null || s.isEmpty())) return false; stacks[tab] = s.dropLast(1); return true }
     fun use(account: Account) { accounts.save(account); this.account = account; address = account.address; playback.accountId = account.id; stacks.clear(); generation++ }
 
@@ -131,6 +141,7 @@ class AppState(val accounts: Accounts, val playback: Playback, val serverFor: (A
     var searchWeb by mutableStateOf(false)
     /** A link that came in before the app was ready. */
     var pendingShare by mutableStateOf<Shared?>(null)
+    var pendingList by mutableStateOf<SharedList?>(null)
 
     /** The id a link from this account carries: the server's own id, for Navidrome its outside address (or the WLAN one). */
     fun shareId(account: Account, server: MusicServer): String = when (account.kind) {
@@ -167,6 +178,21 @@ class AppState(val accounts: Accounts, val playback: Playback, val serverFor: (A
         val track = result.track
         if (result.match != Match.Missing && track != null) { playback.play(server, listOf(track)); nowPlaying = true }
         else notice = tr("„{title}“ von {artist} ist nicht in deiner Mediathek.", "title" to shared.title, "artist" to shared.artist)
+    }
+
+    /** A received Mixtape (card c9b15c67): on the same server the playlist itself, when this user may see it; else the list as
+     *  sent – played from the own library (and, in LiDio privat, the internet), with "Übertragen" to keep it. */
+    suspend fun openSharedList(shared: SharedList) {
+        val match = withContext(Dispatchers.IO) { accounts.all().firstOrNull { shared.server.isNotEmpty() && shared.server in idsOf(it) } }
+        if (match != null && shared.id.isNotEmpty()) {
+            if (match.id != account?.id) use(match)
+            resolve()
+            val server = serverFor(match.copy(address = address))
+            val there = withContext(Dispatchers.IO) { runCatching { server.playlist(shared.id) }.getOrNull() }
+            if (there != null && there.second.isNotEmpty()) { tab = Tab.Library; open(Route.PlaylistPage(shared.id, shared.name)); return }
+        }
+        tab = Tab.Library
+        open(Route.RemotePage(RemoteList(Source.Mixtape, SharedList.pack(shared.items), shared.name, count = shared.items.size)))
     }
 
     /** Checks which address answers; on a change the screens reload and the playing queue moves over. */
@@ -322,6 +348,12 @@ fun LiDioApp(state: AppState) {
         }
         // While on the fallback: look for the own server again every minute.
         LaunchedEffect(state.fallback) { while (state.fallback) { delay(60_000); state.resolve() } }
+        // How long music stays on the phone (Olaf 05.10.2026): tidied quietly a while after the start, at most once a day.
+        LaunchedEffect(account.id, state.fallback) {
+            if (state.fallback) return@LaunchedEffect
+            delay(20_000)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { Keep.tidy(context, account.id, server) } }
+        }
         // Under Now Playing the rest is still drawn, but TalkBack must not read it (nor find a second "Pause").
         if (state.modern) {
             // "Modern" (card d894cc42): the screens fill everything, the glass bars float above and blur what scrolls beneath.
@@ -363,6 +395,12 @@ fun LiDioApp(state: AppState) {
                 Label(tr("Ordner wird durchsucht … {n} Titel", "n" to n), 15f, 600)
             }
         }
+        LaunchedEffect(state.pendingList, state.account) {
+            val list = state.pendingList ?: return@LaunchedEffect
+            if (state.account == null) return@LaunchedEffect
+            state.pendingList = null
+            scope.launch { state.openSharedList(list) }
+        }
         // A shared link waits until a server is there.
         LaunchedEffect(state.pendingShare, state.account) {
             val shared = state.pendingShare ?: return@LaunchedEffect
@@ -395,7 +433,7 @@ private fun webOr(web: Boolean, server: MusicServer): MusicServer {
 @Composable
 private fun Screen(state: AppState, server: MusicServer, route: Route?) {
     when (route) {
-        null -> if (state.tab == Tab.Search) SearchScreen(state, server) else StartScreen(state, server)
+        null -> when (state.tab) { Tab.Search -> SearchScreen(state, server); Tab.New -> NewScreen(state, server); else -> StartScreen(state, server) }
         Route.Library -> LibraryScreen(state, server)
         Route.Artists -> ArtistsScreen(state, server)
         Route.Albums -> AlbumsScreen(state, server)
@@ -404,6 +442,10 @@ private fun Screen(state: AppState, server: MusicServer, route: Route?) {
         Route.Servers -> ServersScreen(state)
         Route.Downloaded -> DownloadedScreen(state, server)
         Route.Import -> ImportScreen(state, server)
+        Route.Upload -> UploadScreen(state, server)
+        Route.Mixtapes -> PlaylistsScreen(state, server, mixtapes = true)
+        is Route.AddMusic -> AddMusicScreen(state, server, route)
+        is Route.CoverCrop -> CoverCropScreen(state, server, route)
         Route.Skins -> SkinsScreen(state)
         Route.Web -> WebScreen(state)
         Route.Favorites -> FavoritesScreen(state, server)
@@ -411,7 +453,7 @@ private fun Screen(state: AppState, server: MusicServer, route: Route?) {
         is Route.MixPage -> MixScreen(state, server, route.kind)
         Route.Guide -> GuideScreen(state)
         is Route.RemotePage -> RemoteScreen(state, server, route)
-        is Route.ImportWith -> ImportScreen(state, server, route.wanted, route.name, route.cover)
+        is Route.ImportWith -> ImportScreen(state, server, route.wanted, route.name, route.cover, route.mixtape)
         is Route.ArtistPage -> ArtistScreen(state, webOr(route.web, server), route)
         is Route.AlbumPage -> AlbumScreen(state, webOr(route.web, server), route)
         is Route.PlaylistPage -> PlaylistScreen(state, webOr(route.web, server), route)
@@ -427,7 +469,7 @@ private fun TabBar(state: AppState) {
         Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).height(54.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             Tab.entries.forEach { tab ->
                 val on = tab == state.tab
-                Column(Modifier.weight(1f).tourAnchor(when (tab) { Tab.Start -> "start"; Tab.Library -> "mediathek"; Tab.Search -> "suchen" }).clickable(role = Role.Tab) {
+                Column(Modifier.weight(1f).tourAnchor(when (tab) { Tab.Start -> "start"; Tab.New -> "neu"; Tab.Library -> "mediathek"; Tab.Search -> "suchen" }).clickable(role = Role.Tab) {
                     // Tapping the tab you're on goes back to its start (iOS).
                     if (on) state.stacks.remove(tab) else state.tab = tab
                 }.padding(top = 6.dp).semantics { contentDescription = tab.label }, horizontalAlignment = Alignment.CenterHorizontally) {

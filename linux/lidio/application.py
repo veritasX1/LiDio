@@ -34,7 +34,9 @@ class Application(Adw.Application):
                                ("settings", lambda *_: self.settings_dialog(), ["<Control>comma"]),
                                ("mini", lambda *_: self.open_mini(), ["<Control><Shift>m"]),
                                ("milkdrop", lambda *_: self.open_milkdrop(), ["<Control><Shift>v"]),
-                               ("help", lambda *_: self.show_help(), ["F1"]), ("lyrics-online", None, [])]:
+                               ("help", lambda *_: self.show_help(), ["F1"]), ("lyrics-online", None, [])] + (
+                               # Card e1f44cfb: own music (ripped CDs) onto the server – through the LiDio-Lader, LiDio privat only.
+                               [("upload", lambda *_: self.window and self.window.upload_dialog(), ["<Control>u"])] if PRIVATE else []):
             if cb:
                 a = Gio.SimpleAction.new(name, None); a.connect("activate", cb); self.add_action(a)
             if keys:
@@ -48,6 +50,8 @@ class Application(Adw.Application):
         m.append("Mini-Player", "app.mini")
         m.append("Milkdrop", "app.milkdrop")
         m.append(_("Playlist importieren …"), "app.import")
+        if PRIVATE:
+            m.append(_("Musik hochladen …"), "app.upload")
         m.append(_("Einstellungen …"), "app.settings")
         m.append(_("Server …"), "app.servers")
         m.append(_("Liedtexte aus dem Netz (lrclib.net)"), "app.lyrics-online")
@@ -79,6 +83,8 @@ class Application(Adw.Application):
 
     def do_startup(self):
         Adw.Application.do_startup(self)
+        # LiDio's own symbols (e.g. the computer with the arrow up for "Musik hochladen", card e1f44cfb).
+        Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).add_search_path(os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "icons"))
         css = Gtk.CssProvider(); css.load_from_path(os.path.join(os.path.dirname(__file__), "style.css"))
         Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         self.mpris = Mpris(self, self.player)
@@ -88,13 +94,16 @@ class Application(Adw.Application):
         self.present_window()
 
     def do_open(self, files, n, hint):
-        """lidio://t#… (from the link page "In LiDio öffnen") or https://lisoft.goip.de/lidio/t#…: play that title."""
-        from .share import Shared
+        """lidio://t#… (from the link page "In LiDio öffnen") or https://lisoftware.de/lidio/t#…: play that title."""
+        from .share import Shared, SharedList
         self.present_window()
         for f in files:
             shared = Shared.parse(f.get_uri())
             if shared:
                 self.open_shared(shared); break
+            mixtape = SharedList.parse(f.get_uri())
+            if mixtape:
+                self.open_shared_list(mixtape); break
 
     # ---------- shared titles ----------
     def share_id(self, account, server):
@@ -126,6 +135,30 @@ class Application(Adw.Application):
                 pass
             ids = self._setting("serverkennung", {})
         return {ids.get(account["id"], "")} - {""}
+
+    def open_shared_list(self, shared):
+        """A received Mixtape (card c9b15c67): on the same server the playlist itself, else the list as sent – played from the
+        own library, with the server symbol to keep it as a playlist (it stays a Mixtape there, too)."""
+        from .window import run
+        from .importing import RemoteList
+
+        def work():
+            for acc in accounts.all_accounts():
+                if shared.server and shared.id and shared.server in self._ids_of(acc):
+                    server = accounts.server_for(acc, accounts.reachable(acc))
+                    try:
+                        if server.playlist(shared.id)[1]:
+                            return acc
+                    except Exception:      # noqa: BLE001 – not visible for this user: the list as sent
+                        pass
+            return None
+
+        def done(acc):
+            w = self.window
+            if acc and acc["id"] == (accounts.active() or {}).get("id"):
+                w.push(w.playlist_page(shared.id, shared.name)); return
+            w.push(w.remote_page(RemoteList("Mixtape", shared.pack(shared.items), shared.name, count=len(shared.items))))
+        run(work, done, self.window.toast)
 
     def open_shared(self, shared):
         from .window import run

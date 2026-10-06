@@ -81,10 +81,15 @@ fun style(size: Float, weight: Int = 400, color: Color = Color.Unspecified, tabu
     fontFamily = Inter, fontSize = size.sp, fontWeight = FontWeight(weight), color = color,
     fontFeatureSettings = if (tabular) "tnum" else null, letterSpacing = if (size >= 28) (-0.6).sp else if (size >= 20) (-0.3).sp else (-0.1).sp)
 
+/** Olaf 06.10.2026: white text on a picture gets lost on light covers – a soft dark shadow under it, wherever text lies on art. */
+val OnArt = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.75f), androidx.compose.ui.geometry.Offset(0f, 1.5f), 6f)
+
 @Composable
 fun Label(text: String, size: Float = 17f, weight: Int = 400, color: Color = Ink.label, modifier: Modifier = Modifier,
-          lines: Int = 1, tabular: Boolean = false, align: androidx.compose.ui.text.style.TextAlign? = null) {
-    BasicText(text, modifier, style = style(size, weight, color, tabular).let { if (align != null) it.copy(textAlign = align) else it },
+          lines: Int = 1, tabular: Boolean = false, align: androidx.compose.ui.text.style.TextAlign? = null,
+          shadow: androidx.compose.ui.graphics.Shadow? = null) {
+    BasicText(text, modifier, style = style(size, weight, color, tabular).let { if (align != null) it.copy(textAlign = align) else it }
+        .let { if (shadow != null) it.copy(shadow = shadow) else it },
         maxLines = lines, overflow = TextOverflow.Ellipsis)
 }
 
@@ -93,7 +98,7 @@ fun Label(text: String, size: Float = 17f, weight: Int = 400, color: Color = Ink
 @Composable
 fun ListRow(title: String, subtitle: String? = null, onClick: (() -> Unit)? = null, leading: (@Composable () -> Unit)? = null,
             trailing: (@Composable () -> Unit)? = null, titleColor: Color = Ink.label, separator: Boolean = true, height: Dp = 44.dp,
-            inset: Dp = 16.dp, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null) {
+            inset: Dp = 16.dp, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null, subtitleSymbol: Symbol? = null) {
     val ink = Ink
     Row(modifier.fillMaxWidth().then(if (onClick != null) Modifier.combinedClickable(role = Role.Button, onClick = onClick,
             onLongClick = onLongClick, onLongClickLabel = if (onLongClick != null) tr("Mehr") else null) else Modifier)
@@ -103,7 +108,12 @@ fun ListRow(title: String, subtitle: String? = null, onClick: (() -> Unit)? = nu
             Row(Modifier.fillMaxWidth().padding(end = 16.dp).padding(vertical = 6.dp).height(height - 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Label(title, color = titleColor)
-                    subtitle?.let { Label(it, 13f, color = ink.secondary) }
+                    subtitle?.let {
+                        if (subtitleSymbol == null) Label(it, 13f, color = ink.secondary)
+                        else Row(verticalAlignment = Alignment.CenterVertically) {
+                            SymbolIcon(subtitleSymbol, ink.secondary, 14.dp); Box(Modifier.width(4.dp)); Label(it, 13f, color = ink.secondary)
+                        }
+                    }
                 }
                 trailing?.invoke()
             }

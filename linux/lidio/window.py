@@ -72,11 +72,12 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         self.search_scope, self.web_source = "mine", "music"
         if PRIVAT:
             PRIVAT_UI.follow(app.player)
+            app.offline.extra = PRIVAT.copy_of
         self._install_actions()
 
         # ---- the toolbar: transport | now playing | volume, lyrics, queue ----
-        header = Adw.HeaderBar()
-        transport = Gtk.Box(spacing=2, css_classes=["transport"])
+        header = Adw.HeaderBar(); self.header = header
+        transport = Gtk.Box(spacing=2, css_classes=["transport"]); self.transport = transport
         self.shuffle_btn = self._button("media-playlist-shuffle-symbolic", _("Zufall"), lambda *_: self.player.toggle_shuffle(), toggle=True)
         self.prev_btn = self._button("media-skip-backward-symbolic", _("Zurück"), lambda *_: self.player.previous())
         self.play_btn = self._button("media-playback-start-symbolic", _("Wiedergabe"), lambda *_: self.player.toggle()); self.play_btn.add_css_class("play")
@@ -84,10 +85,16 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         self.repeat_btn = self._button("media-playlist-repeat-symbolic", _("Wiederholen"), lambda *_: self.player.cycle_repeat(), toggle=True)
         for b in (self.shuffle_btn, self.prev_btn, self.play_btn, self.next_btn, self.repeat_btn):
             transport.append(b)
+        # Card fb44cb2d: the pages have no header bar of their own (the toolbar is the player), so Adw's back button never
+        # showed and an album was a dead end. Like the ‹ in Music on the Mac: a back button at the very left of the toolbar,
+        # only while there is a page to go back to (Alt+← and the mouse's back button work, too – Adw.NavigationView).
+        self.back_btn = self._button("go-previous-symbolic", _("Zurück zur vorigen Seite"), lambda *_: self.nav.pop())
+        self.back_btn.set_visible(False)
+        header.pack_start(self.back_btn)
         header.pack_start(transport)
 
-        lcd = Gtk.Box(css_classes=["lcd"], width_request=430)
-        self.lcd_cover = Cover(52, 6)
+        lcd = Gtk.Box(css_classes=["lcd"], width_request=430); self.lcd = lcd
+        self.lcd_cover = Cover(46, 7); self.lcd_cover.set_valign(Gtk.Align.CENTER)
         lcd.append(self.lcd_cover)
         mid = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, valign=Gtk.Align.CENTER, margin_start=10, margin_end=10)
         self.lcd_title = label("LiDio", "lcd-title", xalign=0.5)
@@ -113,7 +120,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         m = Gtk.PopoverMenu.new_from_model(self.app.menu_model())
         menu.set_popover(m)
         header.pack_end(menu); header.pack_end(self.queue_btn); header.pack_end(self.lyrics_btn)
-        vol_box = Gtk.Box(spacing=2, valign=Gtk.Align.CENTER)
+        vol_box = Gtk.Box(spacing=2, valign=Gtk.Align.CENTER); self.vol_box = vol_box
         vol_box.append(Gtk.Image.new_from_icon_name("audio-volume-low-symbolic")); vol_box.append(self.volume)
         header.pack_end(vol_box)
 
@@ -134,13 +141,25 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
 
         # ---- content: a navigation stack ----
         self.nav = Adw.NavigationView()
+        self.nav.connect("notify::visible-page", lambda n, *_: self.back_btn.set_visible(
+            n.get_visible_page() is not None and n.get_previous_page(n.get_visible_page()) is not None))
         self.queue_panel = self._queue_panel()
         self.inner = Adw.OverlaySplitView(sidebar_position=Gtk.PackType.END, show_sidebar=False, sidebar_width_fraction=0.28,
                                           min_sidebar_width=280, max_sidebar_width=380)
         self.inner.set_content(self.nav); self.inner.set_sidebar(self.queue_panel)
         self.toasts = Adw.ToastOverlay(child=self.inner)
         split = Adw.OverlaySplitView(min_sidebar_width=220, max_sidebar_width=260, sidebar_width_fraction=0.2)
-        split.set_sidebar(side); split.set_content(self.toasts)
+        # Card bb728258 (Olaf: "Apple Music wirkt anders auf dem Desktop"): in Music on macOS 26 the player floats as a glass capsule
+        # at the bottom of the content – the Modern look puts transport, display and buttons there (apply_look moves them).
+        self.capsule = Gtk.Box(spacing=14, css_classes=["player-capsule"], halign=Gtk.Align.CENTER, valign=Gtk.Align.END, margin_bottom=14)
+        # Its own solid colour per theme – the named colours come out transparent in this stylesheet, and the content must not
+        # show through the controls.
+        sm = Adw.StyleManager.get_default()
+        tone = lambda *_a: (self.capsule.remove_css_class("dark" if not sm.get_dark() else "light"),
+                            self.capsule.add_css_class("dark" if sm.get_dark() else "light"))
+        sm.connect("notify::dark", tone); tone()
+        self.content_over = Gtk.Overlay(child=self.toasts); self.content_over.add_overlay(self.capsule)
+        split.set_sidebar(side); split.set_content(self.content_over)
         side.add_css_class("side-panel")
         tv = Adw.ToolbarView(); tv.add_top_bar(header); tv.set_content(split)
         # Main view and the full-screen player (click the cover in the middle of the toolbar, Ctrl+Shift+F).
@@ -160,9 +179,28 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         self.connect_account()
 
     def apply_look(self):
-        """Modern (default, like Music in macOS 26) or Klassisch – a class on the window, the stylesheet does the rest."""
+        """Modern (default, like Music in macOS 26) or Klassisch – a class on the window, the stylesheet does the rest; Modern also
+        moves the player from the toolbar into the floating capsule at the bottom (card bb728258)."""
         modern = self.app._setting("modern", True)
         (self.add_css_class if modern else self.remove_css_class)("modern")
+        movable = [self.transport, self.lcd, self.lyrics_btn, self.queue_btn, self.vol_box]
+        for w in movable:
+            parent = w.get_parent()
+            if parent is self.capsule:
+                self.capsule.remove(w)
+            elif parent is not None:
+                self.header.remove(w) if w is not self.lcd else self.header.set_title_widget(None)
+        if modern:
+            for w in movable:
+                self.capsule.append(w)
+            self.lcd.set_size_request(380, -1); self.volume.set_size_request(80, -1)
+            self.capsule.set_visible(True)
+        else:
+            self.header.pack_start(self.transport); self.header.set_title_widget(self.lcd); self.lcd.set_size_request(430, -1)
+            for w in (self.queue_btn, self.lyrics_btn, self.vol_box):
+                self.header.pack_end(w)
+            self.volume.set_size_request(110, -1)
+            self.capsule.set_visible(False)
 
     # ---------- small helpers ----------
     def _button(self, icon, tip, cb, toggle=False):
@@ -249,11 +287,12 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
             run(server.scan, lambda n: (self.toast(_("{n} Titel in deinen Ordnern", n=n)), self.show_page("start")), self.toast)
 
     # ---------- sidebar ----------
-    TOP = [("start", _("Start"), "go-home-symbolic"), ("web-lists", _("Playlists im Netz"), "network-workgroup-symbolic")]
+    TOP = [("start", _("Start"), "go-home-symbolic"), ("new", _("Neu"), "view-app-grid-symbolic"),
+           ("web-lists", _("Playlists im Netz"), "network-workgroup-symbolic")]
     ENTRIES = [("recent", _("Zuletzt hinzugefügt"), "document-open-recent-symbolic"), ("artists", _("Interpreten"), "avatar-default-symbolic"),
                ("albums", _("Alben"), "media-optical-symbolic"), ("tracks", _("Titel"), "audio-x-generic-symbolic"),
                ("genres", _("Genres"), "view-grid-symbolic"), ("favorites", _("Lieblingstitel"), "starred-symbolic"),
-               ("downloaded", _("Geladen"), "folder-download-symbolic")]
+               ("downloaded", _("Geladen"), "folder-download-symbolic"), ("mixtapes", _("Mixtapes"), "lidio-cassette-symbolic")]
 
     def _fill_sidebar(self, playlists):
         selected = getattr(self.sidebar.get_selected_row(), "key", None)
@@ -270,8 +309,9 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
             self._side_row(key, text, icon, _("Mediathek"))
         if PRIVAT:
             self._side_row("netz", _("Aus dem Netz"), "weather-overcast-symbolic", _("Mediathek"))
+            self._side_row("upload", _("Musik hochladen"), "lidio-computer-upload-symbolic", _("Mediathek"))
         for p in playlists:
-            self._side_row(("playlist", p.id, p.name), p.name, "view-list-symbolic", _("Playlists"))
+            self._side_row(("playlist", p.id, p.name), p.name, "lidio-cassette-symbolic" if getattr(p, "mixtape", False) else "view-list-symbolic", _("Playlists"))
         if self.server:
             self._side_row("new-playlist", _("Neue Playlist …"), "list-add-symbolic", _("Playlists"))
         for i in range(400):
@@ -300,6 +340,10 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         self.show_page(row.key, from_sidebar=True)
 
     # ---------- pages ----------
+    def upload_dialog(self):
+        if PRIVAT:
+            PRIVAT_UI.upload_dialog(self)
+
     def _page(self, title, child, tag=None):
         page = Adw.NavigationPage(title=title, child=child)
         if tag:
@@ -311,12 +355,18 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
             return
         if key == "new-playlist":
             self.sidebar.unselect_all(); self.new_playlist(); return
+        if key == "upload":
+            self.sidebar.unselect_all(); self.upload_dialog(); return
         if isinstance(key, tuple) and key[0] == "pin":
             page = self.album_page(key[2]) if key[1] == "album" else self.playlist_page(key[2], key[3])
         elif isinstance(key, tuple) and key[0] == "playlist":
             page = self.playlist_page(key[1], key[2])
         elif key == "start":
             page = self.start_page()
+        elif key == "new":
+            page = self.new_page()
+        elif key == "mixtapes":
+            page = self.mixtapes_page()
         elif key == "netz" and PRIVAT:
             page = PRIVAT_UI.library_page(self)
         elif key == "web-lists":
@@ -344,6 +394,9 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
 
     def _scroll(self, child):
         s = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
+        # Modern: room below the last row, so the floating player never covers it.
+        if self.app._setting("modern", True):
+            child.set_margin_bottom(max(child.get_margin_bottom(), 96))
         s.set_child(child)
         return s
 
@@ -439,9 +492,11 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
                 artist.connect("clicked", lambda *_: self.push(self.artist_page(album.artist_id)))
             info.append(artist)
             info.append(label(" · ".join(x for x in [self.genre_name(album.genre) if album.genre else "", str(album.year or "")] if x).upper(), "dim caption"))
-            info.append(self._play_buttons(tracks, dedup=False))
+            info.append(self._play_buttons(tracks))
             head.append(info)
             page_box.append(head)
+            # Card 8a7dfec3: the same title twice (two files of one song) – hidden on album pages, too, like on Android.
+            tracks = self._dedup(tracks)
             page_box.append(self.track_list(tracks, numbers=True))
             foot = label((_("Erschienen {year}\n", year=album.year) if album.year else "") + summary(len(tracks), sum(t.duration for t in tracks)),
                          "dim caption", ellipsize=False)
@@ -485,7 +540,7 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         self.toast(_("Angeheftet – steht jetzt oben in der Seitenleiste") if self.is_pinned(pin) else _("Nicht mehr angeheftet"))
 
     def _dedup(self, tracks):
-        """Setting "Doppelte ausblenden" (card 29c6affc): the same title by the same artist only once – not on album pages."""
+        """Setting "Doppelte ausblenden" (card 29c6affc): the same title by the same artist only once – album pages too (8a7dfec3)."""
         from .importing import without_duplicates
         return without_duplicates(tracks) if self.app._setting("doppelte", True) else tracks
 
@@ -522,12 +577,32 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
             box.append(row)
             self._rows.append(row)
         # Like Music: a click selects, a double click (or Enter) plays.
-        box.connect("row-activated", lambda b, r: self.player.play(self.server, tracks, tracks.index(r.track)))
+        box.connect("row-activated", lambda b, r: self.player.play(self.server, tracks, tracks.index(r.track)) if hasattr(r, "track")
+                    else (PRIVAT_UI.missing_play(self, r.line) if PRIVAT and hasattr(r, "line") else None))
         self._mark_playing()
         return box
 
+    def _missing_rows_public(self, playlist):
+        """The public LiDio loads nothing from the net: missing titles grey at their place, the crossed-out cloud."""
+        rows = []
+        for line in playlist.missing:
+            m = re.match(r"^(\d+) · ", line)
+            text = re.sub(r"^\d+ · ", "", line)
+            artist, _sep, title = text.partition(" – ")
+            if not title:
+                artist, title = "", text
+            h = Gtk.Box(spacing=12, css_classes=["missing"])
+            h.append(Cover(36, 4))
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, valign=Gtk.Align.CENTER)
+            col.append(label(title, "title")); col.append(label(artist, "dim caption")); h.append(col)
+            off = Gtk.Image.new_from_icon_name("weather-overcast-symbolic"); off.add_css_class("dim"); h.append(off)
+            row = Gtk.ListBoxRow(child=h, activatable=False); row.set_tooltip_text(_("Fehlt auf dem Server"))
+            row.position = int(m.group(1)) if m else None
+            rows.append(row)
+        return rows
+
     def _row_menu(self, box, row, x, y, playlist):
-        chosen = [r.track for r in box.get_selected_rows()]
+        chosen = [r.track for r in box.get_selected_rows() if hasattr(r, "track")]
         if row.track not in chosen:
             box.unselect_all(); box.select_row(row); chosen = [row.track]
         p = next((q for q in self._playlists if q.id == playlist), None) if isinstance(playlist, str) else playlist
@@ -602,34 +677,45 @@ class Window(MoreMixin, ImportMixin, Adw.ApplicationWindow):
         def show(r):
             p, tracks = r
             head = Gtk.Box(spacing=28, margin_start=36, margin_end=36, margin_top=30, margin_bottom=10)
-            cover = Cover(220, 10); cover.show(self.server.cover_url(p.cover_id, 500) if p.cover_id else
+            cover = Cover(220, 10); cover.show("mixtape:" + p.name if getattr(p, "mixtape", False) and not getattr(p, "own_cover", False) else
+                                                self.server.cover_url(p.cover_id, 500) if p.cover_id else
                                                 (self.server.cover_url(tracks[0].cover_id, 500) if tracks and tracks[0].cover_id else None))
             head.append(cover)
             info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, valign=Gtk.Align.END, hexpand=True)
             info.append(label(p.name, "album-title", wrap=True, lines=2))
+            if getattr(p, "mixtape", False):
+                # Card c9b15c67: a Mixtape shows the cassette under its name.
+                mt = Gtk.Box(spacing=4); mt.append(Gtk.Image.new_from_icon_name("lidio-cassette-symbolic")); mt.append(label(_("Mixtape"), "dim"))
+                info.append(mt)
             info.append(label(summary(len(tracks), sum(t.duration for t in tracks)), "dim"))
             info.append(self._play_buttons(tracks, self.playlist_menu(p, tracks)))
             head.append(info)
             box.append(head)
-            box.append(self.track_list(tracks, show_art=True, playlist=p))
+            # Card eea4ee65: "Musik hinzufügen" right in the playlist (also an empty Mixtape), like Music.
+            if hasattr(self.server, "add_to_playlist"):
+                add = Gtk.Button(css_classes=["flat", "add-music"], halign=Gtk.Align.START, margin_start=28)
+                ab = Gtk.Box(spacing=10)
+                ab.append(Gtk.Image.new_from_icon_name("lidio-cassette-add-symbolic" if getattr(p, "mixtape", False) else "list-add-symbolic"))
+                ab.append(Gtk.Label(label=_("Musik hinzufügen"))); add.set_child(ab)
+                add.connect("clicked", lambda *_a: self.add_music_dialog(p))
+                box.append(add)
+            lst = self.track_list(tracks, show_art=True, playlist=p)
             if p.missing:
-                # What the playlist should have but the server lacks (written by the Android app's import) – greyed, like Music.
-                box.append(Gtk.Label(label=_("Fehlt auf dem Server"), xalign=0, css_classes=["section-title"], margin_start=28, margin_top=22, margin_bottom=4))
-                box.append(Gtk.Label(label=_("Diese Titel stehen in der Playlist, liegen aber nicht auf deinem Server."), xalign=0, css_classes=["dim"],
-                                     margin_start=28, margin_bottom=8))
-                miss = Gtk.ListBox(css_classes=["tracklist"], selection_mode=Gtk.SelectionMode.NONE, margin_start=28, margin_end=28)
-                miss_rows = []
-                for line in p.missing:
-                    h = Gtk.Box(spacing=12, css_classes=["missing"])
-                    h.append(label(re.sub(r"^\d+ · ", "", line), "title"))
-                    h.get_first_child().set_hexpand(True)
-                    off = Gtk.Image.new_from_icon_name("weather-overcast-symbolic"); off.set_tooltip_text(_("Nirgends vorhanden")); off.add_css_class("dim")
-                    h.append(off)
-                    r = Gtk.ListBoxRow(child=h, activatable=False); miss.append(r); miss_rows.append(r)
+                # Card f436a1f7: like Android – what the server lacks stands greyed at its place in the list (cover and length
+                # from the net in LiDio privat, with the cloud to load it), above it how many and "Alle laden".
                 if PRIVAT:
-                    box.append(PRIVAT_UI.missing_tools(self, p, miss_rows))
-                    miss.connect("row-activated", lambda l, r: PRIVAT_UI.missing_play(self, r.line) if hasattr(r, "line") else None)
-                box.append(miss)
+                    box.append(PRIVAT_UI.missing_tools(self, p, None))
+                    rows = PRIVAT_UI.missing_rows(self, p, tracks)
+                else:
+                    box.append(label(_("{count} Titel fehlen auf dem Server – grau", count=len(p.missing)), "dim"))
+                    box.get_last_child().set_margin_start(28)
+                    rows = self._missing_rows_public(p)
+                for r in sorted((r for r in rows if r.position), key=lambda r: r.position):
+                    lst.insert(r, r.position - 1)
+                for r in rows:
+                    if not r.position:
+                        lst.append(r)
+            box.append(lst)
             box.append(Gtk.Box(height_request=30))
         run(lambda: self.server.playlist(playlist_id), show, self.toast)
         return page

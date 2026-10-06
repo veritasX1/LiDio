@@ -50,7 +50,13 @@ class PlaybackService : MediaSessionService() {
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             .setHandleAudioBecomingNoisy(true)   // headphones out → pause, like the iPhone
             .setWakeMode(C.WAKE_MODE_NETWORK)
+            // Olaf 05.10.2026 "blitzschnell": start after half a second of sound instead of ExoPlayer's 2.5 s – the rest
+            // keeps coming while it plays; after a stall 1.5 s, so it does not stutter on.
+            .setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                .setBufferDurationsMs(15_000, 60_000, 500, 1_500).build())
             .build()
+            // The next title's first seconds are fetched ahead, so "Weiter" and the change of title sound at once.
+            .apply { preloadConfiguration = ExoPlayer.PreloadConfiguration(10_000_000L) }
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         session = MediaSession.Builder(this, player).setSessionActivity(open).build()
@@ -88,6 +94,8 @@ object Played {
     var server: MusicServer? = null
     fun note(context: Context, item: MediaItem) {
         val track = trackOf(item) ?: return
+        // The cache key "s:<account>:<id>:…" / "d:<account>:<id>" names the user who is listening.
+        item.localConfiguration?.customCacheKey?.split(":")?.getOrNull(1)?.let { Keep.heard(context, it, track.id) }
         val server = server ?: return
         Thread { server.played(track) }.start()
     }
@@ -129,6 +137,17 @@ class Playback(private val context: Context) {
 
     private val tracks = mutableMapOf<String, Track>()
 
+    /** Titles that failed to play from the internet this session (card 2c35cd98): grey from then on, skipped. */
+    val unplayable = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
+    fun isUnavailable(track: Track) = track.unavailable || unplayable[track.id] == true
+
+    /** Finds a title's sound address ahead of time (internet titles; blocking – call off the main thread). */
+    fun warm(server: MusicServer, track: Track) {
+        val uri = Uri.parse(server.streamUrl(track, 0))
+        if (uri.scheme == NetStream.scheme) NetStream.resolve(context, NetStream.page(uri))
+    }
+
     fun connect() {
         val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, token).buildAsync()
@@ -138,6 +157,18 @@ class Playback(private val context: Context) {
             c.addListener(object : Player.Listener {
                 override fun onEvents(player: Player, events: Player.Events) = refresh()
                 override fun onPlayerError(e: androidx.media3.common.PlaybackException) {
+                    // A title from the internet that cannot be fetched (removed, blocked here): it turns grey and the
+                    // next one plays – quietly, the listener goes on (Olaf 05.10.2026). A lost connection is not its fault.
+                    val now = current
+                    val network = e.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                        e.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+                    if (now != null && !network && now.path?.startsWith("https://") == true) {
+                        // Grey only when the source itself confirms it (a refused download can be passing) – asked quietly.
+                        val server = Played.server
+                        if (server != null) Thread { if (now.id in runCatching { server.unplayable(listOf(now)) }.getOrDefault(emptySet()))
+                            context.mainExecutor.execute { unplayable[now.id] = true } }.start()
+                        if (c.hasNextMediaItem()) { c.seekToNextMediaItem(); c.prepare(); c.play(); return }
+                    }
                     error = tr("Wiedergabe nicht möglich – {if}.", "if" to (if (e.errorCode in 2000..2999) "keine Verbindung zum Server" else "Format nicht unterstützt"))
                 }
             })
@@ -208,8 +239,14 @@ class Playback(private val context: Context) {
     }
 
     /** Plays these tracks from `start` on (Apple Music: tap a title → the album or list from there). */
-    fun play(server: MusicServer, list: List<Track>, start: Int = 0, shuffled: Boolean = false) {
+    fun play(server: MusicServer, all: List<Track>, start: Int = 0, shuffled: Boolean = false) {
         val c = controller ?: return
+        // Grey titles are left out; the tapped one keeps its place among the rest.
+        val wanted = all.getOrNull(start)
+        if (wanted != null && isUnavailable(wanted) && !shuffled) return
+        val list = all.filterNot { isUnavailable(it) }
+        if (list.isEmpty()) return
+        @Suppress("NAME_SHADOWING") val start = wanted?.let { w -> list.indexOfFirst { it.id == w.id } }?.coerceAtLeast(0) ?: 0
         Played.server = server
         list.forEach { tracks[it.id] = it }
         val kbit = settings.bitrate()
@@ -246,6 +283,25 @@ class Playback(private val context: Context) {
     fun seek(ms: Long) { controller?.seekTo(ms); position = ms }
     fun jump(i: Int) { controller?.seekTo(i, 0); refresh() }
     fun remove(i: Int) { controller?.run { if (i in 0 until mediaItemCount) removeMediaItem(i) }; refresh() }
+    /** Card 208e755b: the play order as one setting – shuffle and repeat together, one button cycles through them. */
+    val order: Order get() = when {
+        repeat == Player.REPEAT_MODE_ONE -> Order.RepeatOne
+        repeat == Player.REPEAT_MODE_ALL -> Order.RepeatAll
+        shuffle -> Order.Shuffle
+        else -> Order.InOrder
+    }
+    fun cycleOrder() {
+        controller?.run {
+            when (order) {
+                Order.InOrder -> { shuffleModeEnabled = true; repeatMode = Player.REPEAT_MODE_OFF }
+                Order.Shuffle -> { shuffleModeEnabled = false; repeatMode = Player.REPEAT_MODE_ALL }
+                Order.RepeatAll -> { shuffleModeEnabled = false; repeatMode = Player.REPEAT_MODE_ONE }
+                Order.RepeatOne -> { shuffleModeEnabled = false; repeatMode = Player.REPEAT_MODE_OFF }
+            }
+        }
+        refresh()
+    }
+
     fun toggleShuffle() { controller?.run { shuffleModeEnabled = !shuffleModeEnabled }; refresh() }
     /** Off → whole list → this title → off (Apple Music's repeat button). */
     fun cycleRepeat() {
@@ -272,8 +328,15 @@ class Playback(private val context: Context) {
     fun addToQueue(server: MusicServer, track: Track) { tracks[track.id] = track; controller?.addMediaItem(item(server, track, settings.bitrate())); refresh() }
 
     /** A title for the player: from the store when it's there (no network needed), else streamed under its own key. */
-    fun item(server: MusicServer, track: Track, kbit: Int = 0): MediaItem {
+    fun item(given: MusicServer, track: Track, kbit: Int = 0): MediaItem {
+        // One list, many places (Olaf 05.10.2026): a title from the internet inside a server playlist streams from
+        // the internet source – or plays its file when it was loaded onto the phone.
+        val server = if (given.kind != ServerKind.Web && track.path?.startsWith("https://") == true) Variant.webServer(context) ?: given else given
         val stored = Offline.stored(context, accountId, track)
+        // A title from the internet that was loaded onto the phone plays from its file – at once, without the network.
+        // Card 66bd0f1b: also a server title whose song was loaded from the internet onto this phone before the server had it.
+        val loaded = if (stored != null) null else if (server.kind == ServerKind.Web) WebDownloads.fileFor(track) else WebDownloads.copyOf(track)
+        if (loaded != null) return item(server, track, kbit, "datei:" + loaded.path, Uri.fromFile(loaded).toString())
         return item(server, track, kbit, stored?.first ?: Offline.streamKey(accountId, track, kbit), stored?.second)
     }
 
@@ -299,5 +362,13 @@ class Playback(private val context: Context) {
                 .setExtras(Bundle().apply { putString("albumId", track.albumId); putString("track", Index.encode(track).toString()) })
                 .build())
             .build()
+    }
+}
+
+/** How the queue plays (card 208e755b). */
+enum class Order(val symbol: Symbol) {
+    InOrder(Symbol.Repeat), Shuffle(Symbol.Shuffle), RepeatAll(Symbol.Repeat), RepeatOne(Symbol.RepeatOne);
+    fun label() = when (this) {
+        InOrder -> tr("Der Reihe nach"); Shuffle -> tr("Zufällig"); RepeatAll -> tr("Alle wiederholen"); RepeatOne -> tr("Diesen Titel wiederholen")
     }
 }

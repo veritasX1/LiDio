@@ -52,7 +52,8 @@ val Red = Color(0xFFFF3B30)
 /** "Playlist importieren" (card 4): a file or pasted text → compared with the server → a playlist of what's there, and
  *  the missing ones as text. Nothing is downloaded from anywhere. */
 @Composable
-fun ImportScreen(state: AppState, server: MusicServer, initial: List<Wanted> = emptyList(), initialName: String = "", cover: String? = null) {
+fun ImportScreen(state: AppState, server: MusicServer, initial: List<Wanted> = emptyList(), initialName: String = "", cover: String? = null,
+                 mixtape: Boolean = false) {
     val ink = Ink
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -91,6 +92,8 @@ fun ImportScreen(state: AppState, server: MusicServer, initial: List<Wanted> = e
             val made = withContext(Dispatchers.IO) { runCatching {
                 server.createPlaylist(name.trim().ifEmpty { "Importiert" }, tracks).also { made ->
                     if (missing.isNotEmpty()) server.noteMissing(made.id, missing)
+                    // A received Mixtape stays one on the own server, too (card c9b15c67).
+                    if (mixtape) server.markMixtape(made.id)
                     // Olaf 05.10.2026: the playlist keeps the picture it has at Deezer/Spotify (best effort, quietly).
                     cover?.let { url -> runCatching { java.net.URL(url).openStream().use { it.readBytes() } }.getOrNull()?.let { server.setPlaylistCover(made.id, it) } }
                 } } }

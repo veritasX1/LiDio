@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
@@ -35,10 +36,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.combinedClickable
@@ -57,19 +60,20 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 // ---------- building blocks ----------
 
 /** The navigation bar of a pushed page: "‹ Mediathek" in tint on the left, the title small in the middle. */
 @Composable
-fun NavBar(state: AppState, title: String = "", trailing: (@Composable () -> Unit)? = null) {
+fun NavBar(state: AppState, title: String = "", clear: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
     val ink = Ink
     val stack = state.stack()
     val previous = stack.getOrNull(stack.size - 2)?.let(::titleOf) ?: state.tab.label
     // iOS 26: back is a round glass button (no text), toolbar buttons sit in glass too.
     if (LocalModern.current) {
-        Box(Modifier.fillMaxWidth().background(ink.background).windowInsetsPadding(WindowInsets.statusBars).height(56.dp)) {
+        Box(Modifier.fillMaxWidth().background(if (clear) Color.Transparent else ink.background).windowInsetsPadding(WindowInsets.statusBars).height(56.dp)) {
             Box(Modifier.align(Alignment.CenterStart).padding(start = 16.dp)) { GlassCircle(Symbol.ChevronLeft, tr("Zurück zu {previous}", "previous" to previous)) { state.back() } }
             Label(title, 17f, 600, modifier = Modifier.align(Alignment.Center).width(180.dp), align = TextAlign.Center)
             trailing?.let { Box(Modifier.align(Alignment.CenterEnd).padding(end = 16.dp).height(44.dp).glass(RoundedCornerShape(22.dp), 6.dp)
@@ -90,7 +94,7 @@ fun NavBar(state: AppState, title: String = "", trailing: (@Composable () -> Uni
 
 fun titleOf(route: Route): String = when (route) {
     Route.Library -> tr("Mediathek"); Route.Artists -> tr("Interpreten"); Route.Albums -> tr("Alben"); Route.Tracks -> tr("Titel")
-    Route.Playlists -> tr("Playlists"); Route.Servers -> tr("Server"); Route.Downloaded -> tr("Geladen"); Route.Import -> tr("Importieren"); Route.Skins -> tr("Skins"); Route.Web -> tr("Aus dem Netz"); Route.Favorites -> tr("Lieblingstitel"); is Route.GenrePage -> route.genre.name; is Route.MixPage -> if (route.kind == "favoriten") tr("Lieblings-Mix") else tr("Neu entdecken"); Route.Guide -> tr("Anleitung")
+    Route.Playlists -> tr("Playlists"); Route.Servers -> tr("Einstellungen"); Route.Downloaded -> tr("Geladen"); Route.Import -> tr("Importieren"); Route.Upload -> tr("Hochladen"); Route.Mixtapes -> tr("Mixtapes"); is Route.AddMusic -> route.name; is Route.CoverCrop -> tr("Cover"); Route.Skins -> tr("Skins"); Route.Web -> tr("Aus dem Netz"); Route.Favorites -> tr("Lieblingstitel"); is Route.GenrePage -> GenreNames.local(route.genre.name); is Route.MixPage -> if (route.kind == "favoriten") tr("Lieblings-Mix") else tr("Neu entdecken"); Route.Guide -> tr("Anleitung")
     is Route.RemotePage -> route.list.name; is Route.ImportWith -> tr("Importieren")
     is Route.ArtistPage -> route.name; is Route.AlbumPage -> tr("Album"); is Route.PlaylistPage -> route.name
 }
@@ -155,15 +159,20 @@ fun LazyListScope.albumGrid(state: AppState, server: MusicServer, albums: List<A
 /** A title row: art (or the number on album pages), title, artist; the playing one marked in tint. */
 @Composable
 fun TrackRow(state: AppState, server: MusicServer, track: Track, number: Int? = null, showArt: Boolean = true,
-             subtitle: String? = if (number == null) track.artist else null, onClick: () -> Unit) {
+             subtitle: String? = if (number == null) track.artist else null,
+             /** Off in rows that are swiped through sideways (pages of titles): there a sideways swipe turns the page. */
+             swipeable: Boolean = true, onClick: () -> Unit) {
     val ink = Ink
     val playing = state.playback.current?.id == track.id
+    // Card 2c35cd98 / Olaf 05.10.2026: what the source cannot deliver is grey and does not pretend to play or load.
+    val unavailable = state.playback.isUnavailable(track)
     var menu by remember { mutableStateOf(false) }
     if (menu) TrackMenu(state, server, track) { menu = false }
     // iOS: swipe a title to the right → "Als Nächstes", to the left → "Zuletzt spielen".
     var swipe by remember(track.id) { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val limit = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
-    Box(Modifier.fillMaxWidth().pointerInput(track.id) {
+    Box(Modifier.fillMaxWidth().pointerInput(track.id, swipeable) {
+        if (!swipeable) return@pointerInput
         detectHorizontalDragGestures(onDragEnd = {
             if (swipe > limit) { state.playback.playNext(server, track); state.notice = tr("„{title}“ kommt als Nächstes.", "title" to track.title) }
             else if (swipe < -limit) { state.playback.addToQueue(server, track); state.notice = tr("„{title}“ kommt zuletzt.", "title" to track.title) }
@@ -175,10 +184,12 @@ fun TrackRow(state: AppState, server: MusicServer, track: Track, number: Int? = 
             SymbolIcon(if (swipe > 0) Symbol.PlayNext else Symbol.PlayLast, Color.White, 22.dp)
         }
         Box(Modifier.graphicsLayer { translationX = swipe }.background(if (swipe != 0f) ink.background else Color.Transparent)) {
-    ListRow(track.title, subtitle,
-        onClick = onClick, onLongClick = { menu = true }, titleColor = if (playing) ink.tint else ink.label, height = if (showArt) 60.dp else 48.dp,
+    ListRow(track.title, if (unavailable) tr("Nicht verfügbar") else subtitle,
+        onClick = if (unavailable) ({ state.notice = tr("„{title}“ ist zurzeit nicht verfügbar.", "title" to track.title) }) else onClick,
+        onLongClick = { if (!unavailable) menu = true },
+        titleColor = if (unavailable) ink.tertiary else if (playing) ink.tint else ink.label, height = if (showArt) 60.dp else 48.dp,
         leading = {
-            if (showArt) Cover(server.cover(track, 120), Modifier.size(48.dp), 5.dp)
+            if (showArt) Cover(server.cover(track, 120), Modifier.size(48.dp).graphicsLayer { alpha = if (unavailable) 0.35f else 1f }, 5.dp)
             else Box(Modifier.width(24.dp), contentAlignment = Alignment.Center) {
                 if (playing) SymbolIcon(Symbol.SpeakerHigh, ink.tint, 16.dp)
                 else Label("${number ?: ""}", 15f, color = ink.secondary, tabular = true)
@@ -189,6 +200,10 @@ fun TrackRow(state: AppState, server: MusicServer, track: Track, number: Int? = 
             // Card 2aaf09ce: loading → a filling ring, waiting → a still dotted ring, loaded → the small arrow.
             val key = state.account?.let { Offline.downloadKey(it.id, track) }
             when {
+                unavailable -> {}
+                // From the internet but loaded onto this phone: the phone, not the cloud (card 66bd0f1b).
+                server.kind == ServerKind.Web && WebDownloads.fileFor(track) != null ->
+                    SymbolIcon(Symbol.Phone, ink.secondary, 14.dp, modifier = Modifier.padding(end = 8.dp).semantics { contentDescription = tr("Auf diesem Telefon") })
                 // Neither on the server nor on the phone – out in the internet: a cloud (Olaf 05.10.2026).
                 server.kind == ServerKind.Web ->
                     SymbolIcon(Symbol.Cloud, ink.tertiary, 15.dp, modifier = Modifier.padding(end = 8.dp).semantics { contentDescription = tr("Im Internet") })
@@ -197,7 +212,7 @@ fun TrackRow(state: AppState, server: MusicServer, track: Track, number: Int? = 
                     if (p == null) WaitingRing(18.dp) else ProgressRing(p, ink.tint, 18.dp)
                 }
                 // Olaf 05.10.2026: where the title is – a small phone (on this phone: loaded, heard, own folders) or a small server.
-                server.kind == ServerKind.Local || state.account?.let { Offline.stored(context, it.id, track) } != null ->
+                server.kind == ServerKind.Local || state.account?.let { Offline.stored(context, it.id, track) } != null || WebDownloads.copyOf(track) != null ->
                     SymbolIcon(Symbol.Phone, ink.secondary, 14.dp, modifier = Modifier.padding(end = 8.dp).semantics { contentDescription = tr("Auf diesem Telefon") })
                 // On the server: tap loads this one title onto the phone (Olaf 05.10.2026: single songs, not only whole playlists).
                 else -> Box(Modifier.size(32.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = tr("Auf dieses Telefon laden")) {
@@ -208,7 +223,7 @@ fun TrackRow(state: AppState, server: MusicServer, track: Track, number: Int? = 
             }
             if (track.duration > 0) Label(duration(track.duration), 13f, color = ink.secondary, tabular = true)
             // From the internet: tap plays (streamed), ↓ loads it into "Aus dem Netz" (card 6c9ba022).
-            if (server.kind == ServerKind.Web) Box(Modifier.padding(start = 4.dp)) { WebLoadButton(track.asHit(server), state) }
+            if (server.kind == ServerKind.Web && !unavailable) Box(Modifier.padding(start = 4.dp)) { WebLoadButton(track.asHit(server), state) }
         })
         }
     }
@@ -224,20 +239,15 @@ fun StartScreen(state: AppState, server: MusicServer) {
     val (lists, retryLists) = rememberLoad(server, state.generation) { if (server.kind == ServerKind.Web) server.playlists() else emptyList() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
         largeTitle(tr("Start"))
+        item { SectionHeader(tr("Top-Auswahl für dich")) }
+        item { TopPicks(state, server, recent.value.orEmpty()) }
         if (recent.value?.isNotEmpty() == true) { item { SectionHeader(tr("Zuletzt gespielt")) }; item { AlbumRow(state, server, recent.value) } }
         if (server.kind == ServerKind.Web) {
             // LiDio privat without server (card d1f83bf9): what is current – the charts and the web source's playlists first.
             item { SectionHeader(tr("Charts & Playlists")) }
             loading(lists, retryLists) { item { PlaylistRow(state, server, it) } }
         }
-        // iOS "Für dich": two mixes made from the own library – favourites with similar titles, and what was never played yet.
-        item { SectionHeader(tr("Mixe für dich")) }
-        item {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                MixTile(tr("Lieblings-Mix"), tr("Deine Favoriten und Ähnliches"), listOf(Color(0xFFFF375F), Color(0xFFBF5AF2)), Modifier.weight(1f)) { state.open(Route.MixPage("favoriten")) }
-                MixTile(tr("Neu entdecken"), tr("Noch nie gehört"), listOf(Color(0xFF0A84FF), Color(0xFF30D158)), Modifier.weight(1f)) { state.open(Route.MixPage("entdecken")) }
-            }
-        }
+        // iOS 26 "Top-Auswahl für dich": tall cards – the mixes made from the own library, then what was played lately.
         item { SectionHeader(if (server.kind == ServerKind.Web) "Neuerscheinungen" else tr("Neu hinzugefügt")) }
         if (newest.error == null || recent.error == null) loading(newest, retryNewest) { item { AlbumRow(state, server, it) } }
         if (frequent.value?.isNotEmpty() == true && frequent.value != recent.value) { item { SectionHeader(tr("Oft gehört")) }; item { AlbumRow(state, server, frequent.value) } }
@@ -258,15 +268,39 @@ private fun AlbumRow(state: AppState, server: MusicServer, all: List<Album>) {
     }
 }
 
+/** Playlists as tiles, two per row down the page (a category with nothing else on it). */
+fun LazyListScope.playlistGrid(state: AppState, server: MusicServer, lists: List<Playlist>) {
+    items(lists.chunked(2), key = { row -> "pg" + row.first().id }) { row ->
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            row.forEach { p ->
+                Column(Modifier.weight(1f).clickable(role = Role.Button) { state.open(Route.PlaylistPage(p.id, p.name, web = server.kind == ServerKind.Web)) }) {
+                    Cover(server.playlistCover(p, 400), Modifier.fillMaxWidth().aspectRatio(1f), 8.dp)
+                    Label(p.name, 15f, 500, modifier = Modifier.padding(top = 6.dp), lines = 2)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (p.mixtape) { SymbolIcon(Symbol.Cassette, Ink.secondary, 14.dp); Box(Modifier.width(4.dp)) }
+                    Label(listOfNotNull(if (p.mixtape) tr("Mixtape") else null, if (p.trackCount > 0) tr("{trackCount} Titel", "trackCount" to p.trackCount) else null).joinToString(" · "),
+                        13f, color = Ink.secondary)
+                }
+                }
+            }
+            if (row.size == 1) Spacer(Modifier.weight(1f))
+        }
+    }
+}
+
 /** Playlists as large tiles in a row. */
 @Composable
 fun PlaylistRow(state: AppState, server: MusicServer, lists: List<Playlist>) {
     LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(lists, key = { it.id }) { p ->
             Column(Modifier.width(160.dp).clickable(role = Role.Button) { state.open(Route.PlaylistPage(p.id, p.name, web = server.kind == ServerKind.Web)) }) {
-                Cover(server.cover(p.coverId, 320), Modifier.size(160.dp), 8.dp)
+                Cover(server.playlistCover(p, 320), Modifier.size(160.dp), 8.dp)
                 Label(p.name, 15f, 500, modifier = Modifier.padding(top = 6.dp), lines = 2)
-                if (p.trackCount > 0) Label(tr("{trackCount} Titel", "trackCount" to p.trackCount), 13f, color = Ink.secondary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (p.mixtape) { SymbolIcon(Symbol.Cassette, Ink.secondary, 14.dp); Box(Modifier.width(4.dp)) }
+                    Label(listOfNotNull(if (p.mixtape) tr("Mixtape") else null, if (p.trackCount > 0) tr("{trackCount} Titel", "trackCount" to p.trackCount) else null).joinToString(" · "),
+                        13f, color = Ink.secondary)
+                }
             }
         }
     }
@@ -284,14 +318,17 @@ fun LibraryScreen(state: AppState, server: MusicServer) {
         largeTitle(tr("Mediathek"), trailing = {
             Label(if (editing) tr("Fertig") else tr("Bearbeiten"), 17f, if (editing) 600 else 400, ink.tint,
                 Modifier.padding(end = 12.dp).clickable(role = Role.Button) { editing = !editing })
-            Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = tr("Server")) { state.open(Route.Servers) }
-                .semantics { contentDescription = tr("Server") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Server, ink.tint, 24.dp) }
+            // Olaf 05.10.2026: the settings behind a gear, not a server symbol.
+            Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = tr("Einstellungen")) { state.open(Route.Servers) }
+                .semantics { contentDescription = tr("Einstellungen") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Gear, ink.tint, 24.dp) }
         })
         // iOS 26: what is pinned stands above everything (long press on an album or a playlist → Anheften).
         item { PinnedGrid(state, server) }
-        val entries = listOf(Triple(Symbol.Playlists, tr("Playlists"), Route.Playlists), Triple(Symbol.Artists, tr("Interpreten"), Route.Artists),
+        val entries = listOf(Triple(Symbol.Playlists, tr("Playlists"), Route.Playlists), Triple(Symbol.Cassette, tr("Mixtapes"), Route.Mixtapes), Triple(Symbol.Artists, tr("Interpreten"), Route.Artists),
             Triple(Symbol.Albums, tr("Alben"), Route.Albums), Triple(Symbol.Note, tr("Titel"), Route.Tracks), Triple(Symbol.Star, tr("Lieblingstitel"), Route.Favorites), Triple(Symbol.Downloaded, tr("Geladen"), Route.Downloaded)) +
-            (if (Variant.PRIVATE) listOf(Triple(Symbol.Globe, tr("Aus dem Netz"), Route.Web)) else emptyList())
+            (if (Variant.PRIVATE) listOf(Triple(Symbol.Globe, tr("Aus dem Netz"), Route.Web)) else emptyList()) +
+            // Card e1f44cfb: own music (ripped CDs) onto the server – where the LiDio-Lader is there (Emby/Jellyfin).
+            (if (Variant.PRIVATE && server.kind != ServerKind.Local && server.kind != ServerKind.Web) listOf(Triple(Symbol.PhoneUpload, tr("Musik hochladen"), Route.Upload)) else emptyList())
         items(if (editing) entries else entries.filter { it.second !in hidden }) { (symbol, label, route) ->
             if (editing) ListRow(label, height = 48.dp,
                 leading = { Box(Modifier.width(28.dp), contentAlignment = Alignment.Center) { SymbolIcon(symbol, ink.tint, 24.dp) } },
@@ -386,24 +423,61 @@ fun TracksScreen(state: AppState, server: MusicServer) {
     }
 }
 
+private val mixtapeScope = kotlinx.coroutines.MainScope()
+
+/** A sheet asking for a name (new Mixtape …). */
 @Composable
-fun PlaylistsScreen(state: AppState, server: MusicServer) {
-    val (lists, retry) = rememberCachedLoad("${state.account?.id}:${server.kind}:playlists", server, state.generation) { server.playlists() }
+fun NameSheet(title: String, hint: String, onClose: () -> Unit, onDone: (String) -> Unit) {
+    val ink = Ink
+    var name by remember { mutableStateOf("") }
+    MenuSheet(title, null, onClose) {
+        Row(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(ink.grouped).padding(10.dp)) {
+            Box(Modifier.weight(1f)) {
+                if (name.isEmpty()) Label(hint, 17f, color = ink.tertiary)
+                androidx.compose.foundation.text.BasicTextField(name, { name = it.take(80) }, singleLine = true, textStyle = style(17f, color = ink.label),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(ink.tint), modifier = Modifier.fillMaxWidth().semantics { contentDescription = hint })
+            }
+        }
+        MenuRow(tr("Anlegen"), Symbol.Plus, last = true, color = if (name.isBlank()) ink.tertiary else ink.tint) { if (name.isNotBlank()) onDone(name.trim()) }
+    }
+}
+
+@Composable
+fun PlaylistsScreen(state: AppState, server: MusicServer, mixtapes: Boolean = false) {
+    // mixtapes: the section "Mixtapes" (card c9b15c67) – the same list, only the playlists shared as a Mixtape.
+    val (all, retry) = rememberCachedLoad("${state.account?.id}:${server.kind}:playlists", server, state.generation) { server.playlists() }
+    val lists = if (!mixtapes) all else Load(all.value?.filter { it.mixtape }, all.error, all.loading)
+    var naming by remember { mutableStateOf(false) }
+    if (naming) NameSheet(tr("Neues Mixtape"), tr("Name des Mixtapes"), { naming = false }) { name ->
+        naming = false
+        mixtapeScope.launch {
+            val made = withContext(Dispatchers.IO) { runCatching { server.createPlaylist(name, emptyList()).also { server.markMixtape(it.id) } }.getOrNull() }
+            state.notice = if (made != null) tr("Mixtape „{name}“ angelegt – lange auf Titel drücken → Zur Playlist hinzufügen.", "name" to name) else tr("Das Mixtape ließ sich nicht anlegen.")
+            state.generation++
+        }
+    }
     Column(Modifier.fillMaxSize()) {
         NavBar(state)
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
-            largeTitle(tr("Playlists"), topInset = false, trailing = {
+            if (mixtapes) largeTitle(tr("Mixtapes"), topInset = false, trailing = {
+                // A new Mixtape just for oneself: a name, an empty playlist marked as Mixtape – fill it with "Zur Playlist hinzufügen".
+                Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = tr("Neues Mixtape")) { naming = true }
+                    .semantics { contentDescription = tr("Neues Mixtape") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Plus, Ink.tint, 24.dp, weight = 2.2f) }
+            }) else largeTitle(tr("Playlists"), topInset = false, trailing = {
                 Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = tr("Playlist importieren")) { state.open(Route.Import) }
                     .semantics { contentDescription = tr("Playlist importieren") }, contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Plus, Ink.tint, 24.dp, weight = 2.2f) }
             })
             loading(lists, retry) { list ->
-                if (list.isEmpty()) item { Label(tr("Noch keine Playlists auf diesem Server."), 15f, color = Ink.secondary, modifier = Modifier.padding(16.dp)) }
+                if (list.isEmpty()) item { Label(if (mixtapes) tr("Noch keine Mixtapes. Eine Playlist lange drücken → „Als Mixtape teilen“.") else tr("Noch keine Playlists auf diesem Server."),
+                    15f, color = Ink.secondary, lines = 3, modifier = Modifier.padding(16.dp)) }
                 items(list, key = { it.id }) { playlist ->
                     var menu by remember { mutableStateOf(false) }
-                    if (menu) CollectionMenu(state, server, Pin("playlist", playlist.id, playlist.name, playlist.coverId, server.kind == ServerKind.Web), null) { menu = false }
-                    ListRow(playlist.name, playlist.trackCount.takeIf { it > 0 }?.let { tr("{it} Titel", "it" to it) }, onClick = { state.open(Route.PlaylistPage(playlist.id, playlist.name, web = server.kind == ServerKind.Web)) },
+                    if (menu) CollectionMenu(state, server, Pin("playlist", playlist.id, playlist.name, playlist.coverId, server.kind == ServerKind.Web), null, playlist.mixtape) { menu = false }
+                    ListRow(playlist.name, listOfNotNull(if (playlist.mixtape) tr("Mixtape") else null, playlist.trackCount.takeIf { it > 0 }?.let { tr("{it} Titel", "it" to it) })
+                        .joinToString(" · ").ifEmpty { null }, subtitleSymbol = if (playlist.mixtape) Symbol.Cassette else null,
+                        onClick = { state.open(Route.PlaylistPage(playlist.id, playlist.name, web = server.kind == ServerKind.Web)) },
                         onLongClick = { menu = true }, height = 68.dp,
-                        leading = { Cover(server.cover(playlist.coverId, 160), Modifier.size(56.dp), 6.dp) }, trailing = { Chevron() })
+                        leading = { Cover(server.playlistCover(playlist, 160), Modifier.size(56.dp), 6.dp) }, trailing = { Chevron() })
                 }
             }
         }
@@ -412,6 +486,18 @@ fun PlaylistsScreen(state: AppState, server: MusicServer) {
 
 @Composable
 fun PlayButtons(state: AppState, server: MusicServer, tracks: List<Track>) {
+    // Olaf 05.10.2026: from the internet, every title is checked in the background – what cannot be played turns grey,
+    // so fast that the user notices nothing (about a second for a long list).
+    if (server.kind == ServerKind.Web) LaunchedEffect(tracks.map { it.id }) {
+        val bad = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { server.unplayable(tracks) }.getOrDefault(emptySet()) }
+        bad.forEach { state.playback.unplayable[it] = true }
+        // "Wiedergabe" starts with the first title: its sound address is found now, so the tap plays at once.
+        // Only this one – the player fetches the next ones itself while a title plays.
+        val first = tracks.firstOrNull { !state.playback.isUnavailable(it) }
+        if (first != null && state.playback.current == null) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { state.playback.warm(server, first) }
+        }
+    }
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Capsule(Symbol.Play, tr("Wiedergabe"), Modifier.weight(1f)) { if (tracks.isNotEmpty()) state.playback.play(server, tracks) }
         Capsule(Symbol.Shuffle, tr("Zufall"), Modifier.weight(1f)) { if (tracks.isNotEmpty()) state.playback.play(server, tracks, shuffled = true) }
@@ -427,29 +513,55 @@ fun AlbumScreen(state: AppState, server: MusicServer, route: Route.AlbumPage) {
     val (load, retry) = rememberCachedLoad("${state.account?.id}:${server.kind}:al:${route.id}:$hide", server, route.id) {
         server.album(route.id).let { (a, t) -> a to if (hide) Duplicates.tracks(t) else t }
     }
-    Column(Modifier.fillMaxSize()) {
-        NavBar(state, trailing = load.value?.takeIf { server.kind != ServerKind.Local }?.let { {
-            if (server.kind == ServerKind.Web) WebListButton(it.second.map { t -> t.asHit(server) }) else DownloadButton(state, server, it.second) } })
+    val modern = LocalModern.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val gapsOf = remember(route.id) { mutableStateOf(AlbumGaps.Gaps()) }
+    LaunchedEffect(load.value) {
+        val (album, tracks) = load.value ?: return@LaunchedEffect
+        if (Variant.PRIVATE) gapsOf.value = withContext(Dispatchers.IO) { AlbumGaps.find(context, server, album, tracks) }
+    }
+    var ground by remember(route.id) { mutableStateOf<Color?>(null) }
+    val trailing: (@Composable () -> Unit)? = load.value?.takeIf { server.kind != ServerKind.Local }?.let { {
+        if (server.kind == ServerKind.Web) WebListButton(it.second.map { t -> t.asHit(server) }) else DownloadButton(state, server, it.second) } }
+    PageFrame(state, modern, ground, trailing) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
             loading(load, retry) { (album, all) ->
-                val tracks = all
-                item {
+                val discs = all.mapNotNull { it.disc }.toSet().size > 1
+                // Titles the LiDio-Lader brought have no number: in the album's order from the source (card 66bd0f1b).
+                val tracks = if (discs) all else AlbumGaps.sorted(all, gapsOf.value.order)
+                if (modern) item {
+                    ImmersiveHeader(server.cover(album.coverId, 900), album.title, album.artist,
+                        listOfNotNull(album.genre?.let { GenreNames.local(it) }, album.year?.toString()).joinToString(" · "), ground,
+                        onSubtitle = album.artist.takeIf { it.isNotBlank() }?.let { { state.open(Route.ArtistPage(album.artistId ?: "", album.artist, web = server.kind == ServerKind.Web)) } },
+                        fallback = { tracks.firstOrNull { it.coverId != null }?.let { server.cover(it, 900) } }) { ground = it }
+                } else item {
                     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Cover(server.cover(album.coverId, 600) ?: tracks.firstOrNull { it.coverId != null }?.let { server.cover(it, 600) },
                             Modifier.size(260.dp), 10.dp)
                         Label(album.title, 22f, 700, modifier = Modifier.padding(top = 16.dp, start = 24.dp, end = 24.dp), lines = 2, align = TextAlign.Center)
-                        Label(album.artist, 22f, 400, ink.tint, Modifier.clickable(enabled = album.artistId != null) {
-                            album.artistId?.let { state.open(Route.ArtistPage(it, album.artist, web = server.kind == ServerKind.Web)) } })
-                        Label(listOfNotNull(album.genre, album.year?.toString()).joinToString(" · "), 13f, 600, ink.secondary, Modifier.padding(top = 4.dp))
+                        Label(album.artist, 22f, 400, ink.tint, Modifier.clickable(enabled = album.artist.isNotBlank()) {
+                            state.open(Route.ArtistPage(album.artistId ?: "", album.artist, web = server.kind == ServerKind.Web)) })
+                        Label(listOfNotNull(album.genre?.let { GenreNames.local(it) }, album.year?.toString()).joinToString(" · "), 13f, 600, ink.secondary, Modifier.padding(top = 4.dp))
                     }
                 }
                 item { PlayButtons(state, server, tracks) }
                 item { Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(0.5.dp).background(ink.separator)) }
-                val discs = tracks.mapNotNull { it.disc }.toSet().size > 1
-                itemsIndexed(tracks, key = { _, t -> t.id }) { i, track ->
-                    if (discs && (i == 0 || tracks[i - 1].disc != track.disc)) Label("CD ${track.disc}", 15f, 600, ink.secondary, Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp))
-                    TrackRow(state, server, track, number = track.number ?: (i + 1), showArt = false,
-                        subtitle = track.artist.takeIf { album.compilation || it != album.artist }) { state.playback.play(server, tracks, i) }
+                // Card c569f2c1: an incomplete album shows what the server lacks, grey at its place (LiDio privat).
+                val gaps = if (discs) emptyList() else gapsOf.value.missing
+                if (gaps.isNotEmpty()) item { MissingHeader(state, gaps) }
+                val rows = withMissing(tracks, gaps)
+                fun queue(): List<Track> = rows.mapNotNull { r -> if (r is Track) r else MissingHits.known(context, r as String) }
+                itemsIndexed(rows, key = { i, r -> if (r is Track) r.id else "m$i-$r" }) { i, r ->
+                    if (r is Track) {
+                        val t = tracks.indexOf(r)
+                        if (discs && (t == 0 || tracks[t - 1].disc != r.disc)) Label("CD ${r.disc}", 15f, 600, ink.secondary, Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp))
+                        TrackRow(state, server, r, number = if (gaps.isEmpty()) r.number ?: (t + 1) else i + 1, showArt = false,
+                            subtitle = r.artist.takeIf { album.compilation || it != album.artist }) {
+                            if (gaps.isEmpty()) state.playback.play(server, tracks, t) else queue().let { q -> state.playback.play(server, q, q.indexOf(r)) } }
+                    } else MissingTrackRow(state, r as String, number = i + 1, onPlay = { found ->
+                        val q = queue().let { list -> if (list.none { it.id == found.id }) list + found else list }
+                        state.playback.play(server, q, q.indexOfFirst { it.id == found.id }.coerceAtLeast(0))
+                    })
                 }
                 item {
                     Column(Modifier.padding(16.dp)) {
@@ -464,55 +576,171 @@ fun AlbumScreen(state: AppState, server: MusicServer, route: Route.AlbumPage) {
 
 @Composable
 fun ArtistScreen(state: AppState, server: MusicServer, route: Route.ArtistPage) {
-    val (load, retry) = rememberLoad(server, route.id) { server.artist(route.id) }
-    Column(Modifier.fillMaxSize()) {
-        NavBar(state)
+    val ink = Ink
+    val modern = LocalModern.current
+    // A title only knows its artist's name: then the page looks the artist up first (route.id empty).
+    val (load, retry) = rememberCachedLoad("${state.account?.id}:${server.kind}:ar:${route.id}:${route.name}", server, route.id, route.name) {
+        val id = route.id.ifEmpty { server.findArtist(route.name) ?: throw ServerError(tr("Zu „{name}“ gibt es keine Interpretenseite.", "name" to route.name)) }
+        server.artistPage(id)
+    }
+    var ground by remember(route.id, route.name) { mutableStateOf<Color?>(null) }
+    val web = server.kind == ServerKind.Web
+    // Card e0f5b181 (Olaf 06.10.2026: "man sieht nur das, was der Server hat"): LiDio privat adds the artist's page at its
+    // music source – top titles, and the albums and singles the own server doesn't have – below the own ones.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val netServer = remember { if (web) null else Variant.webServer(context) }
+    val (netLoad, _) = rememberLoad(route.name, netServer) {
+        val net = netServer ?: return@rememberLoad null
+        runCatching { net.findArtist(route.name)?.let { net.artistPage(it) } }.getOrNull()
+    }
+    PageFrame(state, modern, ground, trailing = null) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
-            largeTitle(route.name, topInset = false)
-            loading(load, retry) { (_, albums) ->
-                item { SectionHeader(tr("Alben")) }
-                albumGrid(state, server, albums)
+            if (!modern) largeTitle(route.name, topInset = false)
+            loading(load, retry) { info ->
+                val playable = if (state.playback.settings.hideDuplicates) Duplicates.tracks(info.top) else info.top
+                val net = netLoad.value
+                val ownTitles = (info.albums + info.singles).map { Matcher.normal(it.title) }.toSet()
+                val netAlbums = net?.albums.orEmpty().filter { Matcher.normal(it.title) !in ownTitles }
+                val netSingles = net?.singles.orEmpty().filter { Matcher.normal(it.title) !in ownTitles }
+                val ownSongs = playable.map { Matcher.normal(it.title) }.toSet()
+                val netTop = net?.top.orEmpty().filter { !it.unavailable && Matcher.normal(it.title) !in ownSongs }
+                val picture = info.picture ?: server.cover(info.artist.coverId, 1200) ?: net?.let { n -> n.picture ?: netServer?.cover(n.artist.coverId, 1200) }
+                if (modern) item {
+                    ArtistHero(picture, info.artist.name.ifEmpty { route.name }, ground,
+                        onPlay = playable.takeIf { it.isNotEmpty() }?.let { { state.playback.play(server, it) } }) { ground = it }
+                } else if (picture != null) item {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                        Cover(picture, Modifier.size(180.dp), 90.dp)
+                    }
+                }
+                if (playable.isNotEmpty()) {
+                    item { SectionHeader(tr("Top-Titel")) }
+                    item { TrackPages(state, server, playable) }
+                }
+                if (info.albums.isNotEmpty()) {
+                    item { SectionHeader(tr("Alben")) }
+                    item { AlbumStrip(state, server, info.albums) }
+                }
+                if (info.singles.isNotEmpty()) {
+                    item { SectionHeader(tr("Singles & EPs")) }
+                    item { AlbumStrip(state, server, info.singles) }
+                }
+                if (netServer != null) {
+                    if (netTop.isNotEmpty()) {
+                        item { SectionHeader(if (playable.isEmpty()) tr("Top-Titel") else tr("Weitere Titel im Netz")) }
+                        item { TrackPages(state, netServer, netTop) }
+                    }
+                    if (netAlbums.isNotEmpty()) {
+                        item { SectionHeader(if (info.albums.isEmpty()) tr("Alben") else tr("Weitere Alben im Netz")) }
+                        item { AlbumStrip(state, netServer, netAlbums) }
+                    }
+                    if (netSingles.isNotEmpty()) {
+                        item { SectionHeader(if (info.singles.isEmpty()) tr("Singles & EPs") else tr("Weitere Singles & EPs im Netz")) }
+                        item { AlbumStrip(state, netServer, netSingles) }
+                    }
+                }
+                if (info.playlists.isNotEmpty()) {
+                    item { SectionHeader(tr("Playlists")) }
+                    item { PlaylistRow(state, server, info.playlists) }
+                }
+                (info.about ?: net?.about)?.let { text ->
+                    item { SectionHeader(tr("Über {name}", "name" to info.artist.name.ifEmpty { route.name })) }
+                    item { AboutCard(text) }
+                }
+                // The own server's similar artists, else the music source's (they open as its pages).
+                val similarFrom = if (info.similar.isEmpty() && net != null && netServer != null) netServer else server
+                val similar = if (similarFrom === server) info.similar else net?.similar.orEmpty()
+                if (similar.isNotEmpty()) {
+                    item { SectionHeader(tr("Ähnliche Künstler:innen")) }
+                    item {
+                        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            items(similar, key = { "aehnlich" + it.id }) { a ->
+                                Column(Modifier.width(112.dp).clickable(role = Role.Button) { state.open(Route.ArtistPage(a.id, a.name, similarFrom.kind == ServerKind.Web)) },
+                                    horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Cover(similarFrom.cover(a.coverId, 300), Modifier.size(112.dp), 56.dp)
+                                    Label(a.name, 13f, 500, modifier = Modifier.padding(top = 6.dp), lines = 2, align = TextAlign.Center)
+                                }
+                            }
+                        }
+                    }
+                }
+                if (playable.isEmpty() && info.albums.isEmpty() && info.singles.isEmpty() && info.about == null && netTop.isEmpty() && netAlbums.isEmpty())
+                    item { Label(tr("Zu diesem Interpreten gibt es hier noch nichts."), 15f, color = ink.secondary, modifier = Modifier.padding(16.dp)) }
+                item { Spacer(Modifier.height(24.dp)) }
             }
         }
+    }
+}
+
+/** "Über …": the text in a card, a few lines first; a tap shows all of it (like Apple Music). */
+@Composable
+private fun AboutCard(text: String) {
+    val ink = Ink
+    var open by remember { mutableStateOf(false) }
+    Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(ink.card)
+        .clickable(role = Role.Button) { open = !open }.padding(16.dp)) {
+        Label(text, 15f, color = ink.label, lines = if (open) Int.MAX_VALUE else 5)
+        if (!open) Label(tr("Mehr"), 15f, 600, ink.tint, Modifier.padding(top = 6.dp))
     }
 }
 
 @Composable
 fun PlaylistScreen(state: AppState, server: MusicServer, route: Route.PlaylistPage) {
     val ink = Ink
+    val context = androidx.compose.ui.platform.LocalContext.current
     val hide = state.playback.settings.hideDuplicates
-    val (load, retry) = rememberCachedLoad("${state.account?.id}:${server.kind}:pl:${route.id}:$hide", server, route.id, disk = PlaylistDisk) {
+    val (load, retry) = rememberCachedLoad("${state.account?.id}:${server.kind}:pl:${route.id}:$hide", server, route.id, state.generation, disk = PlaylistDisk) {
         server.playlist(route.id).let { (p, t) -> p to if (hide) Duplicates.tracks(t) else t }
     }
     Column(Modifier.fillMaxSize()) {
         // Card f3cba42b: "Freigeben" next to ↓ (own server playlists only).
         var sharing by remember { mutableStateOf(false) }
         if (sharing) load.value?.first?.let { ShareSheet(state, server, it) { sharing = false } }
-        NavBar(state, trailing = load.value?.takeIf { server.kind != ServerKind.Local }?.let { {
+        val modern = LocalModern.current
+        var ground by remember(route.id) { mutableStateOf<Color?>(null) }
+        PageFrame(state, modern, ground, trailing = load.value?.takeIf { server.kind != ServerKind.Local }?.let { {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (server.kind == ServerKind.Emby || server.kind == ServerKind.Jellyfin || server.kind == ServerKind.Navidrome)
                     Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button) { sharing = true }.semantics { contentDescription = tr("Freigeben") },
                         contentAlignment = Alignment.Center) { SymbolIcon(Symbol.People, Ink.tint, 24.dp) }
-                if (server.kind == ServerKind.Web) WebListButton(it.second.map { t -> t.asHit(server) }) else DownloadButton(state, server, it.second)
-            } } })
+                if (server.kind == ServerKind.Web) WebListButton(it.second.map { t -> t.asHit(server) }, state, it.first.name,
+                    server.cover(it.first.coverId ?: it.second.firstOrNull()?.coverId, 900)) else DownloadButton(state, server, it.second)
+            } } }) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
             loading(load, retry) { (playlist, tracks) ->
-                item {
+                if (modern) item {
+                    ImmersiveHeader(server.playlistCover(playlist, 900, tracks.firstOrNull()?.coverId), playlist.name, null,
+                        summary(tracks.size, tracks.sumOf { it.duration }), ground) { ground = it }
+                } else item {
                     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Cover(server.cover(playlist.coverId ?: tracks.firstOrNull()?.coverId, 600), Modifier.size(240.dp), 10.dp)
+                        Cover(server.playlistCover(playlist, 600, tracks.firstOrNull()?.coverId), Modifier.size(240.dp), 10.dp)
                         Label(playlist.name, 22f, 700, modifier = Modifier.padding(top = 16.dp, start = 24.dp, end = 24.dp), lines = 2, align = TextAlign.Center)
                         Label(summary(tracks.size, tracks.sumOf { it.duration }), 13f, color = ink.secondary, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
                 item { PlayButtons(state, server, tracks) }
+                // Card eea4ee65 (Olaf: „in einem leeren Mixtape kann man keine Lieder hinzufügen“): like Apple Music, every own
+                // playlist has "Musik hinzufügen" – a search over the own library, ＋ adds at once.
+                if (server.kind == ServerKind.Emby || server.kind == ServerKind.Jellyfin || server.kind == ServerKind.Navidrome) item {
+                    ListRow(tr("Musik hinzufügen"), onClick = { state.open(Route.AddMusic(playlist.id, playlist.name, playlist.mixtape)) }, titleColor = Ink.tint, height = 52.dp,
+                        leading = { Box(Modifier.size(48.dp).clip(RoundedCornerShape(5.dp)).background(Ink.fill.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                            if (playlist.mixtape) SymbolIcon(Symbol.CassetteAdd, Ink.tint, 26.dp) else SymbolIcon(Symbol.Plus, Ink.tint, 22.dp, weight = 2.2f) } })
+                }
                 // Card f23bb4f0: what the server lacks stands in its place, greyed, like an unavailable title in Apple Music.
                 val rows = withMissing(tracks, playlist.missing)
                 if (playlist.missing.isNotEmpty()) item { MissingHeader(state, playlist.missing) }
+                // Olaf 05.10.2026: the playlist plays through in its order – server titles and the missing ones that
+                // were found in the internet or loaded onto the phone; the rest is skipped.
+                fun queue(): List<Track> = rows.mapNotNull { r -> if (r is Track) r else MissingHits.known(context, r as String) }
                 itemsIndexed(rows, key = { i, r -> if (r is Track) "$i-${r.id}" else "m$i-$r" }) { _, r ->
-                    if (r is Track) TrackRow(state, server, r) { state.playback.play(server, tracks, tracks.indexOf(r)) }
-                    else MissingTrackRow(state, r as String, playlist.id)
+                    if (r is Track) TrackRow(state, server, r) { val q = queue(); state.playback.play(server, q, q.indexOf(r)) }
+                    else MissingTrackRow(state, r as String, playlist.id, onPlay = { found ->
+                        val q = queue().let { list -> if (list.none { it.id == found.id }) list + found else list }
+                        state.playback.play(server, q, q.indexOfFirst { it.id == found.id }.coerceAtLeast(0))
+                    })
                 }
             }
+        }
         }
     }
 }
@@ -529,7 +757,10 @@ fun SearchScreen(state: AppState, server: MusicServer) {
     val engine = remember { Variant.engine(context) }
     // Without an own server (the web source is the library) everything is "Im Netz" – no scope to choose.
     val onlyWeb = server.kind == ServerKind.Web
-    val web = engine != null && (onlyWeb || state.searchWeb || isLink(asked))
+    // Olaf 05.10.2026: one big library, no "Deine Mediathek | Im Netz" – the own server's hits come first, the internet adds
+    // what we don't have yet (a title already on the server is left out there).
+    val unified = engine != null && !onlyWeb
+    val web = engine != null
     val prefs = remember { context.getSharedPreferences("netz", android.content.Context.MODE_PRIVATE) }
     var source by remember { mutableStateOf(runCatching { WebSource.valueOf(prefs.getString("quelle", "")!!) }.getOrDefault(WebSource.All)) }
     // Apple Music's search: one bar of scopes below the field – "Top-Treffer", then each kind on its own (card 324583b9).
@@ -561,8 +792,17 @@ fun SearchScreen(state: AppState, server: MusicServer) {
     LaunchedEffect(asked) { Links.parse(asked)?.let { (src, id) -> query = ""; asked = ""; state.open(Route.RemotePage(RemoteList(src, id, ""))) } }
     val searchServer = if (musicSearch) webServer ?: server else server
     val (result, retry) = rememberLoad(searchServer, asked, web, musicSearch) {
-        if (asked.isEmpty() || (web && !musicSearch)) SearchResult() else searchServer.search(asked)
+        if (asked.isEmpty() || (web && !musicSearch)) SearchResult()
+        // Without the internet the own library still answers.
+        else runCatching { searchServer.search(asked) }.getOrElse { if (unified) SearchResult() else throw it }
     }
+    val ownAsked = unified && asked.isNotEmpty() && !isLink(asked)
+    val hideTwice = state.playback.settings.hideDuplicates
+    val (own, _) = rememberLoad(server, asked, ownAsked, hideTwice) {
+        if (!ownAsked) SearchResult() else runCatching { server.search(asked) }.getOrDefault(SearchResult())
+            .let { if (hideTwice) it.copy(tracks = Duplicates.tracks(it.tracks)) else it }
+    }
+    val (ownLists, _) = rememberLoad(server, asked, ownAsked) { if (!ownAsked) emptyList() else runCatching { server.searchPlaylists(asked) }.getOrDefault(emptyList()) }
     val (lists, _) = rememberLoad(searchServer, asked, web, musicSearch) {
         if (asked.isEmpty() || (web && !musicSearch)) emptyList() else searchServer.searchPlaylists(asked)
     }
@@ -596,15 +836,12 @@ fun SearchScreen(state: AppState, server: MusicServer) {
                 .padding(horizontal = 8.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                 SymbolIcon(Symbol.Search, ink.secondary, 18.dp)
                 Box(Modifier.weight(1f).padding(start = 6.dp)) {
-                    if (query.isEmpty()) Label(if (web) tr("Titel, Interpreten oder Link") else tr("Interpreten, Alben, Titel, Playlists"), 17f, color = ink.secondary)
+                    if (query.isEmpty()) Label(if (web) tr("Interpreten, Alben, Titel oder Link") else tr("Interpreten, Alben, Titel, Playlists"), 17f, color = ink.secondary)
                     BasicTextField(query, { query = it }, singleLine = true, textStyle = style(17f, color = ink.label), cursorBrush = SolidColor(ink.tint),
                         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Suchbegriff" })
                 }
                 if (query.isNotEmpty()) Box(Modifier.clickable(role = Role.Button, onClickLabel = tr("Löschen")) { query = "" }) { SymbolIcon(Symbol.Close, ink.secondary, 16.dp) }
             }
-        }
-        if (engine != null && !onlyWeb) item {
-            Segmented(listOf(tr("Deine Mediathek"), tr("Im Netz")), if (web) 1 else 0, Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) { state.searchWeb = it == 1 }
         }
         if (!isLink(asked) && (web || asked.isNotEmpty())) item {
             ScopeBar(scope, if (asked.isEmpty() || (web && !musicSearch)) listOf(SearchScope.Top) else SearchScope.entries, if (web) source else null,
@@ -624,10 +861,46 @@ fun SearchScreen(state: AppState, server: MusicServer) {
             }
         }
         else if (web && !musicSearch) webSearch(state, asked, source, webResult, webRetry)
-        else if (asked.isNotEmpty()) loading(result, retry) { found ->
+        else if (asked.isNotEmpty()) loading(result, retry) { netFound ->
             val playlists = lists.value.orEmpty()
             val top = scope == SearchScope.Top
-            if (found.artists.isEmpty() && found.albums.isEmpty() && found.tracks.isEmpty() && playlists.isEmpty() && !lists.loading)
+            val mine = own.value ?: SearchResult()
+            val myLists = ownLists.value.orEmpty()
+            // What the own server has is shown once – as ours; the internet's copy of it is left out.
+            val found = SearchResult(
+                netFound.artists.filter { a -> mine.artists.none { Matcher.normal(it.name) == Matcher.normal(a.name) } },
+                netFound.albums.filter { a -> mine.albums.none { Matcher.similar(it.title, a.title) >= 0.9 && Matcher.artistScore(a.artist, it.artist) >= 0.9 } },
+                netFound.tracks.filter { t -> mine.tracks.none { Matcher.score(Wanted(t.title, t.artist, seconds = t.duration), it) >= 0.9 } })
+            if (mine.tracks.isNotEmpty() && (top || scope == SearchScope.Titel)) {
+                val shown = if (top) mine.tracks.take(4) else mine.tracks
+                item { SectionHeader(tr("In deiner Mediathek")) }
+                itemsIndexed(shown, key = { _, t -> "mt" + t.id }) { i, track -> TrackRow(state, server, track) { state.playback.play(server, shown, i) } }
+            }
+            if (mine.albums.isNotEmpty() && (top || scope == SearchScope.Alben)) {
+                if (mine.tracks.isEmpty()) item { SectionHeader(tr("In deiner Mediathek")) }
+                items(if (top) mine.albums.take(3) else mine.albums, key = { "mb" + it.id }) { album ->
+                    ListRow(album.title, listOfNotNull(album.artist.ifEmpty { null }, album.year?.toString()).joinToString(" · "),
+                        onClick = { state.open(Route.AlbumPage(album.id)) }, height = 68.dp,
+                        leading = { Cover(server.cover(album.coverId, 160), Modifier.size(56.dp), 6.dp,
+                            fallback = if (album.coverId == null) ({ server.albumCoverFallback(album.id, 160) }) else null) }, trailing = { Chevron() })
+                }
+            }
+            if (myLists.isNotEmpty() && (top || scope == SearchScope.Playlists)) {
+                if (mine.tracks.isEmpty() && mine.albums.isEmpty()) item { SectionHeader(tr("In deiner Mediathek")) }
+                items(if (top) myLists.take(3) else myLists, key = { "mp" + it.id }) { p ->
+                    ListRow(p.name, tr("{trackCount} Titel", "trackCount" to p.trackCount), onClick = { state.open(Route.PlaylistPage(p.id, p.name)) },
+                        height = 68.dp, leading = { Cover(server.playlistCover(p, 160), Modifier.size(56.dp), 6.dp) }, trailing = { Chevron() })
+                }
+            }
+            if (mine.artists.isNotEmpty() && (top || scope == SearchScope.Interpreten)) {
+                if (mine.tracks.isEmpty() && mine.albums.isEmpty() && myLists.isEmpty()) item { SectionHeader(tr("In deiner Mediathek")) }
+                items(if (top) mine.artists.take(2) else mine.artists, key = { "ma" + it.id }) { artist ->
+                    ListRow(artist.name, onClick = { state.open(Route.ArtistPage(artist.id, artist.name)) }, height = 60.dp,
+                        leading = { Cover(server.cover(artist.coverId, 120), Modifier.size(48.dp), 24.dp) }, trailing = { Chevron() })
+                }
+            }
+            val nothingOwn = mine.tracks.isEmpty() && mine.albums.isEmpty() && mine.artists.isEmpty() && myLists.isEmpty()
+            if (nothingOwn && found.artists.isEmpty() && found.albums.isEmpty() && found.tracks.isEmpty() && playlists.isEmpty() && !lists.loading)
                 item { Label(if (everywhere) tr("Nirgends etwas zu „{asked}“.", "asked" to asked) else if (web) tr("Bei {MUSIC} nichts zu „{asked}“.", "MUSIC" to Variant.MUSIC, "asked" to asked) else tr("Auf deinem Server nichts zu „{asked}“.", "asked" to asked), 17f, color = ink.secondary, modifier = Modifier.padding(16.dp)) }
             val tracks = if (top) found.tracks.take(6) else found.tracks
             if ((top || scope == SearchScope.Titel) && tracks.isNotEmpty()) {
@@ -733,8 +1006,8 @@ fun ServersScreen(state: AppState) {
     Column(Modifier.fillMaxSize()) {
         NavBar(state)
         LazyColumn(Modifier.fillMaxSize().background(ink.grouped), contentPadding = chromePadding()) {
-            largeTitle(tr("Server"), topInset = false)
-            item { Label(tr("VERBUNDEN"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, top = 16.dp, bottom = 6.dp)) }
+            largeTitle(tr("Einstellungen"), topInset = false)
+            item { Label(tr("SERVER"), 13f, color = ink.secondary, modifier = Modifier.padding(start = 32.dp, top = 16.dp, bottom = 6.dp)) }
             item {
                 Column(Modifier.padding(horizontal = 16.dp).clip(RoundedCornerShape(10.dp)).background(ink.card)) {
                     all.forEachIndexed { i, account ->
@@ -921,8 +1194,14 @@ fun GenreScreen(state: AppState, server: MusicServer, genre: Genre) {
     Column(Modifier.fillMaxSize()) {
         NavBar(state)
         LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
-            largeTitle(genre.name, topInset = false)
-            lists.value?.takeIf { it.isNotEmpty() }?.let { item { SectionHeader(tr("Playlists")) }; item { PlaylistRow(state, server, it) } }
+            largeTitle(GenreNames.local(genre.name), topInset = false)
+            // Card 8fa32042: a mood from the web has only playlists – then they fill the page as a grid (like Apple's
+            // category pages) instead of one row to the right with nothing below it.
+            val onlyLists = albums.value?.isEmpty() == true || server.kind == ServerKind.Web
+            lists.value?.takeIf { it.isNotEmpty() }?.let {
+                item { SectionHeader(tr("Playlists")) }
+                if (onlyLists) playlistGrid(state, server, it) else item { PlaylistRow(state, server, it) }
+            }
             loading(albums, retry) { a -> if (a.isNotEmpty()) { item { SectionHeader(tr("Alben")) }; albumGrid(state, server, a) } }
         }
     }
@@ -937,22 +1216,43 @@ fun LazyListScope.searchStart(state: AppState, server: MusicServer, recent: List
                 leading = { Box(Modifier.width(24.dp), contentAlignment = Alignment.Center) { SymbolIcon(Symbol.Search, Ink.secondary, 16.dp) } })
         }
     }
-    if (genres.isNotEmpty()) {
+    val shown = GenreNames.shown(genres)
+    if (shown.isNotEmpty()) {
         item { SectionHeader(tr("Kategorien entdecken")) }
-        items(genres.chunked(2)) { row ->
+        items(shown.chunked(2), key = { row -> "k" + row.joinToString { it.id } }) { row ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { g ->
-                    val color = g.color?.let { Color(it.toInt()) } ?: genreColor(g.name)
-                    Box(Modifier.weight(1f).aspectRatio(1.6f).clip(RoundedCornerShape(10.dp))
-                        .background(Brush.linearGradient(listOf(color, color.copy(alpha = 0.7f).compositeOver(Color.Black))))
-                        .clickable(role = Role.Button) { state.open(Route.GenrePage(g, web = server.kind == ServerKind.Web)) }
-                        .padding(12.dp), contentAlignment = Alignment.BottomStart) {
-                        Label(g.name, 17f, 700, Color.White, lines = 2)
-                    }
-                }
+                row.forEach { g -> GenreTile(state, server, g, Modifier.weight(1f)) }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
+    }
+}
+
+/** A category tile like Apple Music (card ef701805, Olaf's template): a picture from the category over the whole tile, toned in
+ *  the tile's colour (grey picture, colour on top in "colour" blending – the duotone look), the name at the bottom left. The
+ *  picture changes every 10 hours, to another cover of the category. */
+@Composable
+private fun GenreTile(state: AppState, server: MusicServer, g: Genre, modifier: Modifier) {
+    val color = g.color?.let { Color(it.toInt()) } ?: genreColor(g.name)
+    val slot = (System.currentTimeMillis() / (10 * 3_600_000L)).toInt()
+    val (picture, _) = rememberCachedLoad("${server.kind}:kachel:${g.id}:$slot", server, g.id, slot) { server.genreCover(g, slot + (g.id.hashCode() and 0xff)) }
+    val grey = remember { androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix().apply { setToSaturation(0f) }) }
+    Box(modifier.aspectRatio(1.6f).clip(RoundedCornerShape(12.dp)).background(color)
+        .clickable(role = Role.Button) { state.open(Route.GenrePage(g, web = server.kind == ServerKind.Web)) }) {
+        picture.value?.let { url ->
+            Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(color, blendMode = androidx.compose.ui.graphics.BlendMode.Color)
+                    drawRect(color.copy(alpha = 0.18f))
+                }) {
+                Cover(url, Modifier.fillMaxSize(), 0.dp, colorFilter = grey)
+            }
+        }
+        // A soft shade at the bottom keeps the name readable on any picture.
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.4f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.5f))))
+        Label(GenreNames.local(g.name), 19f, 800, Color.White, lines = 2, shadow = OnArt,
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 10.dp, end = 12.dp))
     }
 }
 
@@ -1000,3 +1300,64 @@ fun MixScreen(state: AppState, server: MusicServer, kind: String) {
         }
     }
 }
+
+
+/** Card eea4ee65: "Musik hinzufügen" to a playlist – search the own library (or pick from the favourites and what came in lately);
+ *  ＋ adds the title at once and turns into a tick. */
+@Composable
+fun AddMusicScreen(state: AppState, shown: MusicServer, route: Route.AddMusic) {
+    val ink = Ink
+    // Always the own server – LiDio privat may be on its internet fallback for a moment, and a title can only go into an own
+    // playlist from the own library (Olaf: „Musik lässt sich nicht hinzufügen – es gibt sogar eine Meldung“).
+    val server = remember(state.account, state.address) {
+        state.account?.let { a -> if (a.kind == ServerKind.Local || a.kind == ServerKind.Web) null else state.serverFor(a.copy(address = state.address.ifEmpty { a.address })) } ?: shown
+    }
+    var query by remember { mutableStateOf("") }
+    var asked by remember { mutableStateOf("") }
+    LaunchedEffect(query) { delay(300); asked = query.trim() }
+    val added = remember { androidx.compose.runtime.mutableStateListOf<String>() }
+    val (found, _) = rememberLoad(server, asked) {
+        (if (asked.isEmpty()) (runCatching { server.favorites() }.getOrDefault(emptyList()) + runCatching { server.tracks(40, 0) }.getOrDefault(emptyList())).distinctBy { it.id }.take(60)
+        else server.search(asked).tracks).let { if (state.playback.settings.hideDuplicates) Duplicates.tracks(it) else it }
+    }
+    Column(Modifier.fillMaxSize()) {
+        NavBar(state, trailing = { Label(tr("Fertig"), 17f, 600, ink.tint, Modifier.clickable(role = Role.Button) { state.generation++; state.back() }) })
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = chromePadding()) {
+            largeTitle(tr("Musik hinzufügen"), topInset = false)
+            item { Label(tr("zu „{name}“", "name" to route.name), 15f, color = ink.secondary, modifier = Modifier.padding(horizontal = 16.dp)) }
+            item {
+                Row(Modifier.padding(16.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(ink.grouped).padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    SymbolIcon(Symbol.Search, ink.secondary, 18.dp); Spacer(Modifier.width(8.dp))
+                    Box(Modifier.weight(1f)) {
+                        if (query.isEmpty()) Label(tr("Interpreten, Alben, Titel"), 17f, color = ink.tertiary)
+                        androidx.compose.foundation.text.BasicTextField(query, { query = it }, singleLine = true, textStyle = style(17f, color = ink.label),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(ink.tint), modifier = Modifier.fillMaxWidth().semantics { contentDescription = tr("Suchen") })
+                    }
+                }
+            }
+            if (asked.isEmpty()) item { SectionHeader(tr("Lieblingstitel und zuletzt hinzugefügt")) }
+            found.value?.let { tracks ->
+                items(tracks, key = { "add" + it.id }) { t ->
+                    val done = t.id in added
+                    ListRow(t.title, t.artist, height = 60.dp, leading = { Cover(server.cover(t, 120), Modifier.size(48.dp), 5.dp) },
+                        trailing = {
+                            Box(Modifier.size(36.dp).clip(CircleShape).clickable(enabled = !done, role = Role.Button) {
+                                added += t.id
+                                addScope.launch {
+                                    // One quiet second try (a moment without the network) before the message.
+                                    val ok = withContext(Dispatchers.IO) { server.addToPlaylist(route.playlistId, listOf(t)) || run { Thread.sleep(800); server.addToPlaylist(route.playlistId, listOf(t)) } }
+                                    if (!ok) { added -= t.id; state.notice = tr("„{title}“ ließ sich nicht hinzufügen.", "title" to t.title) }
+                                }
+                            }.semantics { contentDescription = if (done) tr("Hinzugefügt") else tr("Hinzufügen") }, contentAlignment = Alignment.Center) {
+                                if (done) SymbolIcon(Symbol.Check, ink.secondary, 18.dp, weight = 2.4f)
+                                else if (route.mixtape) SymbolIcon(Symbol.CassetteAdd, ink.tint, 26.dp) else SymbolIcon(Symbol.Plus, ink.tint, 22.dp, weight = 2.2f)
+                            }
+                        })
+                }
+            }
+        }
+    }
+}
+
+private val addScope = kotlinx.coroutines.MainScope()

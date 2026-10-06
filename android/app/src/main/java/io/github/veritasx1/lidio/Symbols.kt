@@ -21,8 +21,8 @@ import androidx.compose.ui.unit.dp
  *  round caps, optionally filled like the "…fill" variants. */
 enum class Symbol {
     Play, Pause, Forward, Backward, Shuffle, Repeat, RepeatOne, Queue, Search, Note, Playlists, Artists, Albums,
-    Home, Library, Downloaded, Ellipsis, ChevronLeft, ChevronRight, ChevronDown, Gear, SpeakerLow, SpeakerHigh, Plus,
-    Server, Close, Check, Import, Duplicate, Missing, Share, PlayNext, PlayLast, Bolt, Trash, Globe, Video, Quote, Infinity, Grip, Star, Pin, People, Sparkles, Phone, Cloud, CloudOff, ServerDown,
+    Home, Sparkle, Library, Downloaded, Ellipsis, ChevronLeft, ChevronRight, ChevronDown, Gear, SpeakerLow, SpeakerHigh, Plus,
+    Server, Close, Check, Import, Duplicate, Missing, Share, PlayNext, PlayLast, Bolt, Trash, Globe, Video, Quote, Infinity, Grip, Star, Pin, People, Sparkles, Phone, Cloud, CloudOff, ServerDown, PhoneUpload, Cassette, CassetteAdd,
 }
 
 @Composable
@@ -83,6 +83,11 @@ fun DrawScope.drawSymbol(symbol: Symbol, color: Color, weight: Float = 1.8f, fil
         }
         Symbol.Home -> {
             shape(filled) { m(3.5f, 11f); l(12f, 3.8f); l(20.5f, 11f); l(20.5f, 19f); q(20.5f, 20.5f, 19f, 20.5f); l(15f, 20.5f); l(15f, 14.5f); l(9f, 14.5f); l(9f, 20.5f); l(5f, 20.5f); q(3.5f, 20.5f, 3.5f, 19f); close() }
+        }
+        Symbol.Sparkle -> {
+            // "Neu": a four-pointed sparkle with a small one beside it.
+            shape(filled) { m(11f, 3f); q(11.8f, 10.2f, 19f, 11f); q(11.8f, 11.8f, 11f, 19f); q(10.2f, 11.8f, 3f, 11f); q(10.2f, 10.2f, 11f, 3f); close() }
+            shape(true) { m(18.5f, 15.5f); q(18.8f, 18.2f, 21.5f, 18.5f); q(18.8f, 18.8f, 18.5f, 21.5f); q(18.2f, 18.8f, 15.5f, 18.5f); q(18.2f, 18.2f, 18.5f, 15.5f); close() }
         }
         Symbol.Library -> {
             // music library: three spines and a leaning one.
@@ -159,6 +164,17 @@ fun DrawScope.drawSymbol(symbol: Symbol, color: Color, weight: Float = 1.8f, fil
             shape(true) { m(18f, 14f); q(18.5f, 17f, 21f, 17.5f); q(18.5f, 18f, 18f, 21f); q(17.5f, 18f, 15f, 17.5f); q(17.5f, 17f, 18f, 14f); close() } }
         // "iphone": a phone with its speaker slot.
         Symbol.Phone -> { box(6.5f, 2.5f, 11f, 19f, 2.6f); shape { m(10.5f, 5f); l(13.5f, 5f) } }
+        // Card e1f44cfb (Olaf: "ein Handy mit Pfeil nach oben"): from this phone up to the server.
+        // Card c9b15c67: the Mixtape – a compact cassette (body, two reels, the window at the bottom).
+        Symbol.Cassette -> { box(2.5f, 5.5f, 19f, 13f, 2f); drawCircle(color, 1.9f * u, p(8.5f, 11f), style = stroke); drawCircle(color, 1.9f * u, p(15.5f, 11f), style = stroke)
+            shape { m(10.4f, 11f); l(13.6f, 11f); m(7f, 18.5f); l(8.5f, 15.5f); l(15.5f, 15.5f); l(17f, 18.5f) } }
+        // Olaf 06.10.2026: putting a title onto a Mixtape – the cassette with an arrow into it.
+        Symbol.CassetteAdd -> { box(2f, 8.5f, 20f, 13f, 2f); shape { m(4.5f, 11.3f); l(19.5f, 11.3f) }
+            box(7f, 12.8f, 10f, 3.8f, 1.9f)
+            drawCircle(color, 1.1f * u, p(9.3f, 14.7f), style = stroke); drawCircle(color, 1.1f * u, p(14.7f, 14.7f), style = stroke)
+            shape { m(6.5f, 21.5f); l(7.8f, 18.8f); l(16.2f, 18.8f); l(17.5f, 21.5f) }
+            shape { m(12f, 1.2f); l(12f, 6.8f); m(9.5f, 4.4f); l(12f, 6.9f); l(14.5f, 4.4f) } }
+        Symbol.PhoneUpload -> { box(6.5f, 2.5f, 11f, 19f, 2.6f); shape { m(12f, 17f); l(12f, 8f); m(9f, 11f); l(12f, 8f); l(15f, 11f) } }
         // "cloud": only out there in the internet (Olaf 05.10.2026).
         Symbol.Cloud -> shape { m(7f, 18.5f); q(3f, 18.5f, 3f, 14.8f); q(3f, 11.2f, 7f, 11f); q(7.6f, 6f, 12.4f, 6f); q(16.6f, 6f, 17.6f, 10.2f)
             q(21f, 10.6f, 21f, 14.4f); q(21f, 18.5f, 17f, 18.5f); close() }

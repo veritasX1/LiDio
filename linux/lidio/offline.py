@@ -56,13 +56,18 @@ class Offline:
     def has(self, track):
         return track.id in self.index or getattr(self.server, "kind", "") == "local"
 
+    # LiDio privat (card f436a1f7): a server title whose song was loaded from the net onto this computer – its file.
+    extra = None
+
     def path(self, track):
         e = self.index.get(track.id)
-        return os.path.join(self.folder, e["file"]) if e else None
+        if e:
+            return os.path.join(self.folder, e["file"])
+        return self.extra(track) if self.extra else None
 
     def state(self, track):
         """local | loading | waiting | None (only on the server)."""
-        if track.id in self.index or getattr(self.server, "kind", "") == "local":
+        if track.id in self.index or getattr(self.server, "kind", "") == "local" or (self.extra and self.extra(track)):
             return "local"
         if track.id in self.live:
             return "loading"

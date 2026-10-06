@@ -118,10 +118,10 @@ fun VideoScreen(state: AppState, track: Track, onClose: () -> Unit) {
                         SkipButton(forward = true) { skip(10_000) }
                     }
                     Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-                        Label(track.title, 17f, 600, Color.White)
+                        Label(track.title, 17f, 600, Color.White, shadow = OnArt)
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)) {
                             SourceBadge(WebSource.Video)
-                            if (title.isNotEmpty()) Label(title, 13f, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(start = 6.dp))
+                            if (title.isNotEmpty()) Label(title, 13f, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(start = 6.dp), shadow = OnArt)
                         }
                         IosSlider(position, { position = it; controls = true }, tr("Position im Video"), fill = Color.White, track = Color.White.copy(alpha = 0.3f), thumb = false,
                             onRelease = { if (player.duration > 0) player.seekTo((position * player.duration).toLong()) })

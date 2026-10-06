@@ -63,10 +63,9 @@ object Offline {
     }
 
     @Synchronized fun manager(context: Context): DownloadManager = manager ?: DownloadManager(context.applicationContext, database(context),
-        downloads(context), http, Executors.newFixedThreadPool(1)).apply {
-        // One title after the other (Olaf 05.10.2026): spares the server and leaves room for what is playing; in the home
-        // network a 26-title playlist took ~10 s with two at once.
-        maxParallelDownloads = 1
+        downloads(context), http, Executors.newFixedThreadPool(2)).apply {
+        // Olaf 06.10.2026 (card 1092956d): "Downloadgrenze wieder auf max 2 downloads setzen" – two at a time (05.10. it was one).
+        maxParallelDownloads = 2
         requirements = requirements(context)
         addListener(object : DownloadManager.Listener {
             override fun onDownloadChanged(manager: DownloadManager, download: Download, error: Exception?) {
@@ -117,6 +116,22 @@ object Offline {
         Index.entry(context, download)?.let { return download to it.optString("uri") }
         return Index.heard(context, "s:$account:${track.id}:")?.let { (key, e) -> key to e.optString("uri") }
     }
+
+    /** Card da219e16: copies a title that is on the phone (download or completely heard) out of the cache into a file, e.g.
+     *  to share it – no network needed. The bytes are those the phone plays (the original or what the server sent). */
+    fun copyOut(context: Context, key: String, uri: String, out: File): Boolean = runCatching {
+        val cache = if (key.startsWith("d:")) downloads(context) else played(context)
+        val source = CacheDataSource.Factory().setCache(cache).setUpstreamDataSourceFactory(null)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR).createDataSource()
+        source.open(DataSpec.Builder().setUri(uri).setKey(key).build())
+        try {
+            out.outputStream().use { o ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) { val n = source.read(buffer, 0, buffer.size); if (n == androidx.media3.common.C.RESULT_END_OF_INPUT) break; o.write(buffer, 0, n) }
+            }
+        } finally { source.close() }
+        out.length() > 0
+    }.getOrDefault(false)
 
     /** "Gehörtes behalten": fetches the whole title in the background while (or after) it plays. */
     fun keep(context: Context, item: MediaItem) {

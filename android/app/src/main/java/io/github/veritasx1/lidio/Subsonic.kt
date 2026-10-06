@@ -105,6 +105,18 @@ class SubsonicServer(base: String, private val user: String, private val passwor
         return artist(json) to json.optJSONArray("album").objects().map(::album)
     }
 
+    /** The artist's page: biography and similar artists (getArtistInfo2), top titles (getTopSongs) – what the server knows. */
+    override fun artistPage(id: String): ArtistInfo {
+        val (artist, albums) = artist(id)
+        val info = runCatching { call("getArtistInfo2", "id" to id, "count" to 12).optJSONObject("artistInfo2") }.getOrNull()
+        val top = runCatching { call("getTopSongs", "artist" to artist.name, "count" to 20).optJSONObject("topSongs")
+            ?.optJSONArray("song").objects().map(::track) }.getOrDefault(emptyList())
+        val (singles, full) = albums.partition { it.trackCount in 1..3 }
+        return ArtistInfo(artist, top, full, singles, about = plainText(info?.str("biography")),
+            similar = info?.optJSONArray("similarArtist").objects().filter { it.has("id") }.map(::artist),
+            picture = info?.str("largeImageUrl")?.takeIf { it.startsWith("http") && "2a96cbd8b46e442fc41c2b86b821562f" !in it } ?: artist.coverId?.let { coverUrl(it, 1200) })
+    }
+
     override fun albums(order: AlbumOrder, size: Int, offset: Int): List<Album> {
         val type = when (order) {
             AlbumOrder.Newest -> "newest"; AlbumOrder.Recent -> "recent"
@@ -146,6 +158,9 @@ class SubsonicServer(base: String, private val user: String, private val passwor
         else url("stream", "id" to track.id, "format" to "mp3", "maxBitRate" to (if (maxBitrate in 1..319) maxBitrate else 320))
 
     override fun coverUrl(coverId: String, size: Int): String = url("getCoverArt", "id" to coverId, "size" to size)
+
+    override fun mp3Url(track: Track): String =
+        if (track.suffix.equals("mp3", ignoreCase = true)) url("download", "id" to track.id) else url("stream", "id" to track.id, "format" to "mp3", "maxBitRate" to 320)
 
     override fun played(track: Track) { runCatching { call("scrobble", "id" to track.id, "submission" to true) } }
 

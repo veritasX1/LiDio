@@ -16,6 +16,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         MediaBrowserServer.DEVICE = Device.id(this)
         playback = Playback(this).also { it.connect() }
+        // Titles still waiting from last time (an update, a restart) go on loading by themselves.
+        runCatching { WebDownloads.load(this); WebDownloads.start(this) }
         state = AppState(Accounts(this), playback)
         handle(intent)
         // The playing title in the notification and on the lock screen needs Android 13's notification permission.
@@ -32,6 +34,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handle(intent: android.content.Intent?) {
         intent?.data?.let(Shared::parse)?.let { state.pendingShare = it }
+        intent?.data?.let(SharedList::parse)?.let { state.pendingList = it }
         if (!Variant.PRIVATE || intent == null) return
         // LiDio privat: the download notification opens "Aus dem Netz" …
         if (intent.getBooleanExtra("netz", false)) {

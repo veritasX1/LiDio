@@ -11,6 +11,9 @@ from lidio.application import Application
 out, steps = sys.argv[1], sys.argv[2:]
 os.makedirs(out, exist_ok=True)
 app = Application()
+# Olaf's own LiDio may be running – the test run is a second, separate instance (not handed over to his window).
+from gi.repository import Gio
+app.set_flags(app.get_flags() | Gio.ApplicationFlags.NON_UNIQUE)
 
 
 def shot(name):

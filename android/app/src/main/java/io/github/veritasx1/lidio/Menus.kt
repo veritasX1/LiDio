@@ -46,6 +46,8 @@ import org.json.JSONObject
 /** Card 81b01b4a, stage B – iOS 26's context menus, "Zur Playlist hinzufügen" and the pins at the top of the library. */
 
 /** Something pinned at the top of the library (up to six, like iOS 26): an album or a playlist. */
+private val menuScope = kotlinx.coroutines.MainScope()
+
 data class Pin(val kind: String, val id: String, val name: String, val cover: String?, val web: Boolean = false)
 
 object Pins {
@@ -86,9 +88,10 @@ fun MenuRow(label: String, symbol: Symbol, last: Boolean = false, color: android
 
 /** Long press on an album or a playlist: play, shuffle, next, last, add to a playlist, pin. The titles come when needed. */
 @Composable
-fun CollectionMenu(state: AppState, server: MusicServer, pin: Pin, subtitle: String?, onClose: () -> Unit) {
+fun CollectionMenu(state: AppState, server: MusicServer, pin: Pin, subtitle: String?, mixtape: Boolean? = null, onClose: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    // The menu closes at once; what it starts (loading the titles, sharing) must outlive it.
+    val scope = menuScope
     var picking by remember { mutableStateOf<List<Track>?>(null) }
     val account = state.account?.id ?: ""
     fun withTracks(then: (List<Track>) -> Unit) = scope.launch {
@@ -102,6 +105,36 @@ fun CollectionMenu(state: AppState, server: MusicServer, pin: Pin, subtitle: Str
         MenuRow(tr("Als Nächstes spielen"), Symbol.PlayNext) { withTracks { state.playback.playNextAll(server, it) }; onClose() }
         MenuRow(tr("Zuletzt spielen"), Symbol.PlayLast) { withTracks { state.playback.addAllToQueue(server, it) }; onClose() }
         MenuRow(tr("Zur Playlist hinzufügen …"), Symbol.Playlists) { withTracks { picking = it } }
+        if (pin.kind == "playlist" && !pin.web) {
+            // Card c9b15c67: the playlist as a link – the Mixtape.
+            MenuRow(tr("Als Mixtape teilen …"), Symbol.Share) {
+                val acc = state.account
+                withTracks { tracks -> if (acc != null) scope.launch {
+                    val id = withContext(Dispatchers.IO) {
+                        // Olaf 06.10.2026: „alle Nutzer sollen dem Mixtape beitragen können“ – everyone on this server may edit it.
+                        runCatching { server.sharing(pin.id)?.let { sh -> server.share(pin.id, sh.users.associate { it.id to "write" }, everyone = true) } }
+                        runCatching { server.markMixtape(pin.id) }
+                        withContext(Dispatchers.Main) { state.generation++ }
+                        state.shareId(acc, server)
+                    }
+                    val shared = SharedList(id, pin.id, pin.name, tracks.map { Wanted(it.title, it.artist) })
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, shared.text())
+                        .putExtra(android.content.Intent.EXTRA_SUBJECT, tr("Mixtape „{name}“", "name" to pin.name))
+                    context.startActivity(android.content.Intent.createChooser(send, tr("Mixtape teilen")).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                } }
+                onClose()
+            }
+            // Olaf 06.10.2026: Mixtapes also just for oneself – a playlist is led as a Mixtape or not, sharing is separate.
+            if (mixtape != null && (server.kind == ServerKind.Emby || server.kind == ServerKind.Jellyfin))
+                MenuRow(if (mixtape) tr("Kein Mixtape mehr") else tr("Als Mixtape führen"), Symbol.Cassette) {
+                    scope.launch { withContext(Dispatchers.IO) { server.markMixtape(pin.id, !mixtape) }; state.generation++
+                        state.notice = if (mixtape) tr("„{name}“ ist kein Mixtape mehr.", "name" to pin.name) else tr("„{name}“ steht jetzt bei den Mixtapes.", "name" to pin.name) }
+                    onClose()
+                }
+            // Card 5d1ab4c8: an own cover from the photos, the user picks the square section.
+            if (server.kind == ServerKind.Emby || server.kind == ServerKind.Jellyfin)
+                MenuRow(tr("Cover aus Fotos …"), Symbol.Albums) { onClose(); state.open(Route.CoverCrop(pin.id, pin.name)) }
+        }
         val pinned = Pins.has(context, account, pin.id)
         MenuRow(if (pinned) "Lösen" else tr("Anheften"), Symbol.Pin, last = true, filled = pinned) {
             val on = Pins.toggle(context, account, pin); state.generation++

@@ -87,9 +87,56 @@ data class WebJob(val id: String, val hit: WebHit, val state: State = State.Wait
 object WebDownloads {
     var jobs by mutableStateOf<List<WebJob>>(emptyList()); private set
     private var loaded = false
-    private val worker = Executors.newSingleThreadExecutor()
-    @Volatile private var running = false
+    /** Card 1092956d (Olaf 06.10.2026: "Downloadgrenze wieder auf max 2 downloads setzen"): two titles at a time. */
+    const val PARALLEL = 2
+    private val worker = Executors.newFixedThreadPool(PARALLEL)
+    private val running = java.util.concurrent.atomic.AtomicInteger(0)
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
     const val CHANNEL = "netz"
+
+    /** The loaded file of a title from the internet, if it is on this phone (Olaf 05.10.2026: play the file, not the stream). */
+    fun fileFor(track: Track): File? {
+        val key = Variant.key(track.path ?: Variant.watch(track.id))
+        return index().done[key]?.file?.let(::File)?.takeIf { it.isFile }
+    }
+
+    /** The last job for a title (any state), without walking the whole list. */
+    fun jobFor(key: String): WebJob? = index().last[key]
+
+    /** Olaf 06.10.2026: "wenn ich eine playlist herunterlade … die performance geht komplett in den keller". Every row asks
+     *  "is this title loaded / loading?" – with ~500 jobs, walking the list per row and per change froze the app. The answers come
+     *  from an index, built again only when the list itself changes (a title starts, finishes or fails – not on every percent). */
+    private class Index(val of: List<WebJob>, val last: Map<String, WebJob>, val done: Map<String, WebJob>)
+    @Volatile private var cache = Index(emptyList(), emptyMap(), emptyMap())
+    private fun index(): Index {
+        val all = jobs
+        cache.takeIf { it.of === all }?.let { return it }
+        val last = HashMap<String, WebJob>(all.size * 2); val done = HashMap<String, WebJob>(all.size * 2)
+        for (j in all) { last[j.hit.key] = j; if (j.state == WebJob.State.Done) done[j.hit.key] = j }
+        return Index(all, last, done).also { cache = it }
+    }
+
+    /** Progress of the running titles, 0..1 – apart from the list, so a percent step redraws only the ring that shows it. */
+    val progress = androidx.compose.runtime.mutableStateMapOf<String, Float>()
+    private val notes = java.util.concurrent.ConcurrentHashMap<String, String>()
+    fun noteOf(job: WebJob): String = notes[job.id] ?: job.note
+
+    /** Card 66bd0f1b (Olaf 06.10.2026): a title loaded from the internet that the own server has by now (LiDio-Lader) is a
+     *  server title – and its file on the phone is the same song. Matched by title and artist (and length when both know
+     *  it), so the server title shows the phone and plays the file; the user notices only the symbol. */
+    @Volatile private var byTitle: Pair<List<WebJob>, Map<String, List<WebJob>>> = emptyList<WebJob>() to emptyMap()
+    fun copyOf(track: Track): File? {
+        if (track.title.isBlank()) return null
+        val title = Matcher.normal(track.title)
+        // Asked for every row of a list: the loaded titles are indexed by their normalised title once per change of the list.
+        val all = jobs
+        val index = byTitle.takeIf { it.first === all }?.second
+            ?: all.filter { it.state == WebJob.State.Done && it.file != null }.groupBy { Matcher.normal(it.hit.title) }.also { byTitle = all to it }
+        return index[title].orEmpty().lastOrNull { j ->
+                Matcher.artistScore(track.artist, j.hit.artist) >= 0.5 &&
+                (track.duration <= 0 || j.hit.duration <= 0 || kotlin.math.abs(track.duration - j.hit.duration) <= 5) }
+            ?.file?.let(::File)?.takeIf { it.isFile }
+    }
 
     fun folder(context: Context): File =
         File(context.externalMediaDirs.firstOrNull() ?: context.filesDir, tr("Aus dem Netz")).apply { mkdirs() }
@@ -171,35 +218,57 @@ object WebDownloads {
 
     /** The service's loop: takes the next waiting title until none is left. */
     fun run(context: Context, notify: (WebJob?) -> Unit) {
-        if (running) return
-        running = true
+        // Up to PARALLEL loops; each takes the next waiting title (taken and marked in one step, so no title runs twice).
+        // The first loop always starts (its end stops the service); a further one only for a waiting title.
+        while (true) {
+            val now = running.get()
+            if (now >= PARALLEL || (now > 0 && jobs.none { it.state == WebJob.State.Waiting })) return
+            if (running.compareAndSet(now, now + 1)) break
+        }
         worker.execute {
+            // The downloads must never take the CPU from the app and the music (Olaf 06.10.2026).
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND + android.os.Process.THREAD_PRIORITY_LESS_FAVORABLE)
             try {
                 val engine = Variant.engine(context) ?: return@execute
                 while (true) {
-                    val job = synchronized(this) { jobs.firstOrNull { it.state == WebJob.State.Waiting } } ?: break
-                    change(context, job.id) { it.copy(state = WebJob.State.Loading, note = tr("Wird vorbereitet …")) }
+                    val job = synchronized(this) {
+                        jobs.firstOrNull { it.state == WebJob.State.Waiting }?.also { j -> change(context, j.id) { it.copy(state = WebJob.State.Loading, note = tr("Wird vorbereitet …")) } }
+                    } ?: break
                     notify(jobs.first { it.id == job.id })
                     var last = 0L
                     try {
+                        var shown = -1f
                         val file = engine.download(job.hit, folder(context), job.id) { p, note ->
-                            val state = if (note.startsWith("Wird umgewandelt")) WebJob.State.Converting else WebJob.State.Loading
-                            change(context, job.id, persist = false) { it.copy(state = state, progress = p, note = note) }
+                            notes[job.id] = note
+                            // Only a state change touches the list; the percentage goes to its own map, at most every 2 %.
+                            if (note.startsWith("Wird umgewandelt") && jobs.firstOrNull { it.id == job.id }?.state != WebJob.State.Converting)
+                                change(context, job.id, persist = false) { it.copy(state = WebJob.State.Converting) }
+                            if (p - shown >= 0.02f || p >= 1f) { shown = p; main.post { progress[job.id] = p } }
                             val now = System.currentTimeMillis()
-                            if (now - last > 700) { last = now; notify(jobs.firstOrNull { it.id == job.id }) }
+                            if (now - last > 1000) { last = now; notify(jobs.firstOrNull { it.id == job.id }) }
                         }
+                        main.post { progress.remove(job.id) }; notes.remove(job.id)
                         change(context, job.id) { it.copy(state = WebJob.State.Done, progress = 1f, note = "", file = file.absolutePath, at = System.currentTimeMillis()) }
                         WebLibrary.added(context)
                     } catch (e: Exception) {
+                        // A refusal (403) mostly means the loader is out of date – the sites change often. Then: bring it up to
+                        // date at once (at most hourly) and try this title once more, without bothering the user.
+                        val refused = e.message?.contains("403") == true
+                        if (refused && LoaderUpdate.now(context, engine) && jobs.any { it.id == job.id }) {
+                            change(context, job.id) { it.copy(state = WebJob.State.Waiting, progress = 0f, note = tr("Wird erneut versucht …")) }
+                            continue
+                        }
                         if (jobs.any { it.id == job.id })
                             change(context, job.id) { it.copy(state = WebJob.State.Failed, note = e.message?.take(300) ?: tr("Unbekannter Fehler")) }
                     }
                 }
             } finally {
-                running = false
-                notify(null)
+                // The service ends only when the last loop is done.
+                if (running.decrementAndGet() == 0) notify(null)
             }
         }
+        // A second title waiting: start the second loop, too.
+        if (jobs.count { it.state == WebJob.State.Waiting } > 1) run(context, notify)
     }
 }
 
@@ -242,7 +311,26 @@ class WebLoadService : Service() {
             .setSmallIcon(R.drawable.media3_notification_small_icon).setOngoing(true).setContentIntent(open).setOnlyAlertOnce(true)
         if (job == null) return builder.setContentTitle(tr("Aus dem Netz laden")).setContentText(tr("Wird vorbereitet …")).build()
         return builder.setContentTitle(tr("„{title}“ von {label}", "title" to job.hit.title, "label" to job.hit.source.label))
-            .setContentText(listOf(job.note, if (waiting > 0) tr("noch {waiting} in der Warteschlange", "waiting" to waiting) else "").filter { it.isNotEmpty() }.joinToString(" · "))
-            .setProgress(100, (job.progress * 100).toInt(), job.progress <= 0f).build()
+            .setContentText(listOf(WebDownloads.noteOf(job), if (waiting > 0) tr("noch {waiting} in der Warteschlange", "waiting" to waiting) else "").filter { it.isNotEmpty() }.joinToString(" · "))
+            .setProgress(100, ((WebDownloads.progress[job.id] ?: 0f) * 100).toInt(), (WebDownloads.progress[job.id] ?: 0f) <= 0f).build()
+    }
+}
+
+
+/** Keeps the loader current without the user: once a day at the start, and right away when a site refuses. */
+object LoaderUpdate {
+    private fun prefs(context: Context) = context.getSharedPreferences("lader", Context.MODE_PRIVATE)
+
+    /** Updates unless that happened within [minAge]; true when it ran now. Blocking – off the main thread. */
+    fun now(context: Context, engine: WebEngine, minAge: Long = 3600_000L): Boolean {
+        val last = prefs(context).getLong("aktualisiert", 0L)
+        if (System.currentTimeMillis() - last < minAge) return false
+        prefs(context).edit().putLong("aktualisiert", System.currentTimeMillis()).apply()
+        return runCatching { engine.update() }.isSuccess
+    }
+
+    fun daily(context: Context) {
+        if (!Variant.PRIVATE) return
+        Thread { Variant.engine(context)?.let { now(context, it, 20 * 3600_000L) } }.start()
     }
 }

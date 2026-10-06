@@ -22,8 +22,8 @@ android {
         applicationId = "io.github.veritasx1.lidio"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1b"
+        versionCode = 6
+        versionName = "0.4b"
     }
 
     // "oeffentlich" is LiDio as published. A further variant exists only where its own build file is present (privat.gradle.kts).
@@ -37,6 +37,7 @@ android {
             applicationIdSuffix = ".privat"
             versionNameSuffix = "-privat"
             ndk { abiFilters += listOf("arm64-v8a") }
+            proguardFile("proguard-privat.pro")
         }
     }
 
@@ -56,7 +57,8 @@ android {
             signingConfig = if (keystoreProperties.isNotEmpty()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (project.hasProperty("probe")) applicationIdSuffix = ".probe"
         }
     }
 
